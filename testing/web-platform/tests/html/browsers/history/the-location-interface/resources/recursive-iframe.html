@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>Recursive IFrame Fullscreen API success reporter</title>
+<body>
+  <script src="/resources/testdriver.js"></script>
+  <script src="/resources/testdriver-vendor.js"></script>
+  <script>
+    let iframe = null;
+    async function createChildFrame({ src, name, referrerPolicy, sandbox}) {
+      iframe = document.createElement("iframe");
+      iframe.name = name;
+      iframe.style.width = "100%";
+      iframe.style.height = "100%";
+      iframe.referrerPolicy = referrerPolicy
+      if (sandbox) {
+        iframe.setAttribute("sandbox", "allow-scripts");
+      }
+      document.body.appendChild(iframe);
+      await new Promise((resolve) => {
+        iframe.addEventListener("load", resolve, { once: true });
+        iframe.src = src;
+      });
+
+    }
+
+    window.addEventListener("message", async (e) => {
+      // Massage is not for us, try to pass it on...
+      if (e.data.name !== window.name) {
+        iframe?.contentWindow.postMessage(e.data, "*");
+        return;
+      }
+      switch (e.data.action) {
+        case "addIframe":
+          await createChildFrame(e.data.request);
+          break;
+        default:
+          window.top.postMessage(e.data, "*");
+      }
+    });
+
+    let origs = location.ancestorOrigins;
+    let origins = [];
+    for(let i = 0; i < origs.length; ++i) {
+      origins.push(`${origs.item(i)}`);
+    }
+
+    window.top.postMessage({ event: "load", name: window.name, origins: origins }, "*");
+  </script>
+</body>
+

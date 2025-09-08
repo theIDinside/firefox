@@ -44,5 +44,6 @@ interface Location {
   [Throws, NeedsSubjectPrincipal]
   undefined reload(optional boolean forceget = false);
 
-  // Bug 1085214 [SameObject] readonly attribute USVString[] ancestorOrigins;
+  // https://html.spec.whatwg.org/#dom-location-ancestororigins
+  [LegacyUnforgeable, SameObject, Pref="dom.location.ancestorOrigins.enabled"] readonly attribute DOMStringList ancestorOrigins;
 };

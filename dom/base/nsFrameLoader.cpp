@@ -143,6 +143,8 @@ using ViewID = ScrollableLayerGuid::ViewID;
 
 using PrintPreviewResolver = std::function<void(const PrintPreviewResultInfo&)>;
 
+extern mozilla::LazyLogModule gLoadInfoLog;
+
 // Bug 8065: Limit content frame depth to some reasonable level. This
 // does not count chrome frames when determining depth, nor does it
 // prevent chrome recursion.  Number is fairly arbitrary, but meant to
@@ -348,7 +350,7 @@ static already_AddRefed<BrowsingContext> CreateBrowsingContext(
   return BrowsingContext::CreateDetached(
       parentInner, nullptr, nullptr, frameName, parentBC->GetType(),
       {.createdDynamically = !aNetworkCreated,
-       .windowless = parentBC->Windowless()});
+       .windowless = parentBC->Windowless(), .referrerPolicy = aOwner->GetReferrerPolicyAsEnum()});
 }
 
 static bool InitialLoadIsRemote(Element* aOwner) {
@@ -420,6 +422,7 @@ already_AddRefed<nsFrameLoader> nsFrameLoader::Create(
   RefPtr<BrowsingContextGroup> group = InitialBrowsingContextGroup(aOwner);
   RefPtr<BrowsingContext> context =
       CreateBrowsingContext(aOwner, aOpenWindowInfo, group, aNetworkCreated);
+
   NS_ENSURE_TRUE(context, nullptr);
 
   if (XRE_IsParentProcess() && aOpenWindowInfo) {

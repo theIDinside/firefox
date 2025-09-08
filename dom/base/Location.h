@@ -11,6 +11,7 @@
 #include "mozilla/ErrorResult.h"
 #include "mozilla/LinkedList.h"
 #include "mozilla/dom/BrowsingContext.h"
+#include "mozilla/dom/DOMStringList.h"
 #include "mozilla/dom/LocationBase.h"
 #include "nsCycleCollectionParticipant.h"
 #include "nsString.h"
@@ -101,6 +102,8 @@ class Location final : public nsISupports,
 
   void SetHash(const nsACString& aHash, nsIPrincipal& aSubjectPrincipal,
                ErrorResult& aError);
+
+  RefPtr<DOMStringList> AncestorOrigins() const;
 
   nsPIDOMWindowInner* GetParentObject() const { return mInnerWindow; }
 

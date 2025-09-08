@@ -55,6 +55,8 @@
 
 using namespace mozilla::dom;
 
+mozilla::LazyLogModule gLoadInfoLog("LoadInfo");
+
 namespace mozilla::net {
 
 static nsCString CurrentRemoteType() {
@@ -572,6 +574,7 @@ LoadInfo::LoadInfo(dom::WindowGlobalParent* aParentWGP,
   CanonicalBrowsingContext* parentBC = aParentWGP->BrowsingContext();
   MOZ_ASSERT(parentBC);
   ComputeAncestors(parentBC, mAncestorPrincipals, mAncestorBrowsingContextIDs);
+  MOZ_LOG_FMT(gLoadInfoLog, LogLevel::Debug, "Ancestor principals computed: {}", mAncestorPrincipals.Length());
 
   RefPtr<WindowGlobalParent> topLevelWGP = aParentWGP->TopWindowContext();
 
@@ -854,6 +857,72 @@ void LoadInfo::ComputeAncestors(
   }
 }
 
+// TODO: Implement https://github.com/whatwg/html/pull/11560 (somehow)
+// static
+void LoadInfo::CreateRedactedAncestorOrigins(
+    dom::CanonicalBrowsingContext* aDocumentBrowsingContext,
+    nsTArray<nsCOMPtr<nsIPrincipal>>& aAncestorPrincipals) {
+  if (!StaticPrefs::dom_location_ancestorOrigins_enabled()) {
+    MOZ_LOG_FMT(gLoadInfoLog, LogLevel::Debug,
+                "Static pref for ancestorOrigins set to false");
+    return;
+  }
+  nsTArray<uint64_t> ignore;
+
+  const auto referrerPolicyValue = aDocumentBrowsingContext->GetReferrerPolicy();
+
+  auto embedderElementReferrerPolicyIfAny = static_cast<ReferrerPolicy>(referrerPolicyValue);
+
+  bool masked = false;
+
+  if(embedderElementReferrerPolicyIfAny == ReferrerPolicy::No_referrer) {
+    masked = true;
+  }
+
+  CanonicalBrowsingContext* ancestorBC = aDocumentBrowsingContext;
+
+  nsCOMPtr<nsIPrincipal> firstAncestorPrincipal = nullptr;
+
+  // so that we can compare ancestorOrigin in the for loop to parentDoc's origin
+  // (called firstAncestorPrincipal here)
+
+  if (WindowGlobalParent* ancestorWGP = ancestorBC->GetParentWindowContext()) {
+    firstAncestorPrincipal = ancestorWGP->DocumentPrincipal();
+    auto *newPrincipal = aDocumentBrowsingContext->GetCurrentWindowGlobal()->DocumentPrincipal();
+    if (embedderElementReferrerPolicyIfAny == ReferrerPolicy::Same_origin &&
+        !newPrincipal->Equals(ancestorWGP->DocumentPrincipal())) {
+      masked = true;
+    }
+
+    const bool sandboxedOriginOpaque = (ancestorWGP->BrowsingContext()->GetSandboxFlags() & SANDBOXED_ORIGIN) > 0;
+    if(masked || sandboxedOriginOpaque) {
+      aAncestorPrincipals.AppendElement(nullptr);
+    } else {
+      nsCOMPtr<nsIPrincipal> parentPrincipal = ancestorWGP->DocumentPrincipal();
+      MOZ_ASSERT(parentPrincipal, "Ancestor principal is null");
+      aAncestorPrincipals.AppendElement(parentPrincipal.forget());
+    }
+    // We don't want to append the most immediate ancestor twice.
+    ancestorBC = ancestorWGP->BrowsingContext();
+  }
+
+  while (WindowGlobalParent* ancestorWGP =
+             ancestorBC->GetParentWindowContext()) {
+    ancestorBC = ancestorWGP->BrowsingContext();
+    const bool sandboxedOriginOpaque = (ancestorBC->GetSandboxFlags() & SANDBOXED_ORIGIN) > 0;
+    nsCOMPtr<nsIPrincipal> ancestorPrincipal = ancestorWGP->DocumentPrincipal();
+    if((masked || sandboxedOriginOpaque) && ancestorPrincipal->Equals(firstAncestorPrincipal)) {
+      aAncestorPrincipals.AppendElement(nullptr);
+    } else {
+      MOZ_ASSERT(ancestorPrincipal, "Ancestor principal is null");
+      aAncestorPrincipals.AppendElement(ancestorPrincipal.forget());
+      masked = false;
+    }
+  }
+}
+
+// Implements https://github.com/whatwg/html/pull/11560
+// static
 void LoadInfo::ComputeIsThirdPartyContext(nsPIDOMWindowOuter* aOuterWindow) {
   ExtContentPolicyType type =
       nsContentUtils::InternalContentPolicyTypeToExternal(

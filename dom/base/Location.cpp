@@ -176,6 +176,10 @@ void Location::SetHash(const nsACString& aHash, nsIPrincipal& aSubjectPrincipal,
   SetURI(uri, aSubjectPrincipal, aRv);
 }
 
+RefPtr<DOMStringList> Location::AncestorOrigins() const {
+  return mInnerWindow->GetDoc()->GetAncestorOrigins();
+}
+
 void Location::GetHost(nsACString& aHost, nsIPrincipal& aSubjectPrincipal,
                        ErrorResult& aRv) {
   if (!CallerSubsumes(&aSubjectPrincipal)) {

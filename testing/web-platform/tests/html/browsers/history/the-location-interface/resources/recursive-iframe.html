@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>Recursive IFrame Fullscreen API success reporter</title>
+<body>
+  <script src="/resources/testdriver.js"></script>
+  <script src="/resources/testdriver-vendor.js"></script>
+  <script src="./create-iframe.js"></script>
+  <script>
+    let iframe = null;
+
+    window.addEventListener("message", async (e) => {
+      // Massage is not for us, try to pass it on...
+      if (e.data.name !== window.name) {
+        iframe?.contentWindow.postMessage(e.data, "*");
+        return;
+      }
+      switch (e.data.action) {
+        case "addIframe":
+          iframe = document.createElement("iframe");
+          await configAndNavigateIFrame(iframe, e.data.request);
+          break;
+        default:
+          window.top.postMessage(e.data, "*");
+      }
+    });
+
+    let origs = location.ancestorOrigins;
+    let origins = [];
+    for(let i = 0; i < origs.length; ++i) {
+      origins.push(origs.item(i));
+    }
+
+    window.top.postMessage({ event: "sentOrigins", name: window.name, origins: origins }, "*");
+  </script>
+</body>
+

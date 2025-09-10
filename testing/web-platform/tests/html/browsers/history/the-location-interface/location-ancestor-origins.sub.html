@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<title>
+  Location#ancestorOrigins test
+</title>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<script src="./resources/create-iframe.js"></script>
+
+<body>
+  <script>
+    function waitFor(action, frameName) {
+      return new Promise((resolve) => {
+        window.addEventListener("message", function listener(e) {
+          if (e.data.event === action && e.data.name === frameName) {
+            window.removeEventListener("message", listener);
+            resolve(event.data);
+          }
+        });
+      });
+    }
+
+    const frameCreatorPath = "html/browsers/history/the-location-interface/resources/recursive-iframe.html"
+
+    // first src shares origin with self.origin here
+    let iframeSources = [
+      {
+        src: `http://{{hosts[][]}}:{{ports[http][0]}}/${frameCreatorPath}?a`,
+      },
+      {
+        src: `http://{{hosts[alt][]}}:{{ports[http][0]}}/${frameCreatorPath}?b`,
+      },
+      {
+        src: `http://{{hosts[][www]}}:{{ports[http][0]}}/${frameCreatorPath}?c`,
+      },
+    ];
+
+    // origins A, B, C
+    iframeSources.forEach(f => {
+      const url = new URL(f.src, location.origin);
+      f.origin = url.origin;
+    })
+
+    const A = iframeSources[0]
+    const B = iframeSources[1];
+    const C = iframeSources[2];
+
+    const policy = {
+        Default: "",
+        NoRef: "no-referrer",
+        Same: "same-origin"
+    }
+
+    const config = (name, f, referrerPolicy, sandbox = false) => ({ name: name, src: f.src, referrerPolicy: referrerPolicy, sandbox: sandbox })
+
+    // Remember the implicit top-level origin A
+    const testCases = [
+        { // test no-referrer on iframe
+            frames: [
+              config("B1", B, policy.NoRef)
+            ],
+            expected: [
+              ["null"]
+            ]
+        },
+        { // test all default referrer policy
+            frames: [
+              config("B1", B, policy.Default),
+              config("A2", A, policy.Default)
+            ],
+            expected: [
+              [A.origin],
+              [B.origin, A.origin]
+            ]
+        },
+        { // test toggle of masked
+            frames: [
+              config("B1", B, policy.Default),
+              config("A2", A, policy.NoRef)
+            ],
+            expected: [
+              [A.origin],
+              ["null", A.origin]
+            ]
+        },
+        { // another test of toggle of masked
+            frames: [
+              config("B1", B, policy.Default),
+              config("B2", B, policy.Default),
+              config("A2", A, policy.NoRef)
+            ],
+            expected: [
+              [A.origin],
+              [B.origin, A.origin],
+              ["null", "null", A.origin]
+            ]
+        },
+        { // test sandboxed/opaque origin frames
+          frames: [
+              config("C1", C, policy.Default, /* sandbox */ true),
+              config("B2", B, policy.Default),
+            ],
+            expected: [
+              [A.origin],
+              ["null", A.origin],
+            ]
+        },
+        { // 5 - Test same-origin referrer policy
+          frames: [
+              config("B1", B, policy.Default),
+              config("A2", A, policy.Default),
+              config("B2", B, policy.Same)
+            ],
+            expected: [
+              [A.origin],
+              [B.origin, A.origin],
+              ["null", B.origin, A.origin]
+            ]
+        }
+    ]
+
+    testCases.forEach((cfg, index) => {
+      promise_test(async (t) => {
+        const iframeDetails = cfg.frames[0];
+
+        const topFrameAncestorOrigins = waitFor("sentOrigins", iframeDetails.name);
+        const iframe = document.createElement("iframe");
+        await configAndNavigateIFrame(iframe, iframeDetails);
+        const res = await topFrameAncestorOrigins;
+
+        t.add_cleanup(() => {
+          iframe.remove();
+        });
+
+        let results = [res];
+
+        for(let i = 1; i < cfg.frames.length; ++i) {
+            // name of frame, that shall create a new frame
+            const parentName = cfg.frames[i - 1].name;
+            iframe.contentWindow.postMessage({ action: "addIframe", request: cfg.frames[i], name: parentName }, "*");
+            const res = await waitFor("sentOrigins", cfg.frames[i].name);
+            results.push(res);
+        }
+
+        let i = 0;
+        for(const { event, name, origins } of results) {
+          assert_equals(origins.length, cfg.expected[i].length, `[test configuration ${index}, frame ${name}]: Unexpected length of ancestorOrigins list`);
+
+          for(let j = 0; j < origins.length; ++j) {
+            assert_equals(origins[j], cfg.expected[i][j], `[test configuration ${index}, frame ${name}]: Unexpected origin`)
+          }
+          i+=1;
+        }
+      }, `Location.ancestorOrigins configuration ${index}`);
+
+    })
+  </script>
+</body>

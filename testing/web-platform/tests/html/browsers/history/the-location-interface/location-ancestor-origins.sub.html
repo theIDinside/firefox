@@ -6,6 +6,7 @@
 <script src="/resources/testharnessreport.js"></script>
 <script src="/resources/testdriver.js"></script>
 <script src="/resources/testdriver-vendor.js"></script>
+<script src="./resources/create-iframe.js"></script>
 
 <body>
   <script>
@@ -22,7 +23,7 @@
 
     const frameCreatorPath = "html/browsers/history/the-location-interface/resources/recursive-iframe.html"
 
-    // why no A? Because technically the hosting site, is A
+    // first src shares origin with self.origin here
     let iframeSources = [
       {
         src: `http://{{hosts[][]}}:{{ports[http][0]}}/${frameCreatorPath}?a`,
@@ -51,7 +52,7 @@
         Same: "same-origin"
     }
 
-    const config = (name, f, referrerPolicy, sandbox=false) => ({ name: name, src: f.src, referrerPolicy: referrerPolicy, sandbox: sandbox })
+    const config = (name, f, referrerPolicy, sandbox = false) => ({ name: name, src: f.src, referrerPolicy: referrerPolicy, sandbox: sandbox })
 
     // Remember the implicit top-level origin A
     const testCases = [
@@ -123,29 +124,14 @@
       promise_test(async (t) => {
         const iframeDetails = cfg.frames[0];
 
+        const topFrameAncestorOrigins = waitFor("sentOrigins", iframeDetails.name);
         const iframe = document.createElement("iframe");
+        await configAndNavigateIFrame(iframe, iframeDetails);
+        const res = await topFrameAncestorOrigins;
 
         t.add_cleanup(() => {
           iframe.remove();
         });
-
-        iframe.referrerPolicy = iframeDetails.referrerPolicy;
-        iframe.name = iframeDetails.name;
-
-        iframe.style.width = "100%";
-        iframe.style.height = "100%";
-        iframe.src = iframeDetails.src;
-        if (iframeDetails.sandbox) {
-          iframe.setAttribute("sandbox", "allow-scripts");
-        }
-
-        let load = waitFor("load", iframeDetails.name);
-        await new Promise((resolve) => {
-            iframe.onload = resolve;
-            document.body.appendChild(iframe);
-        });
-
-        const res = await load;
 
         let results = [res];
 
@@ -153,20 +139,20 @@
             // name of frame, that shall create a new frame
             const parentName = cfg.frames[i - 1].name;
             iframe.contentWindow.postMessage({ action: "addIframe", request: cfg.frames[i], name: parentName }, "*");
-            const res = await waitFor("load", cfg.frames[i].name);
+            const res = await waitFor("sentOrigins", cfg.frames[i].name);
             results.push(res);
         }
 
         let i = 0;
         for(const { event, name, origins } of results) {
-          assert_equals(origins.length, cfg.expected[i].length, `[test configuration ${index}.${i}]: Unexpected length of ancestorOrigins list`);
+          assert_equals(origins.length, cfg.expected[i].length, `[test configuration ${index}, frame ${name}]: Unexpected length of ancestorOrigins list`);
 
           for(let j = 0; j < origins.length; ++j) {
-            assert_equals(origins[j], cfg.expected[i][j], `[test configuration ${index}.${i}]: Expected origin ${cfg.expected[i][j]}, but saw ${origins[j]}`)
+            assert_equals(origins[j], cfg.expected[i][j], `[test configuration ${index}, frame ${name}]: Unexpected origin`)
           }
           i+=1;
         }
-      });
+      }, `Location.ancestorOrigins configuration ${index}`);
 
     })
   </script>

@@ -3685,6 +3685,29 @@ static void CheckIsBadPolicy(nsILoadInfo::CrossOriginOpenerPolicy aPolicy,
 #endif  // defined(EARLY_BETA_OR_EARLIER)
 }
 
+static already_AddRefed<DOMStringList> ProduceAncestorOriginsList(
+    const nsTArray<nsCOMPtr<nsIPrincipal>>& aPrincipals) {
+  RefPtr<DOMStringList> list = new DOMStringList();
+
+  for (const auto& principal : aPrincipals) {
+    nsAutoString origin;
+    if (principal == nullptr) {
+      origin.AssignLiteral(u"null");
+    } else {
+      nsAutoCString originNoSuffix;
+      nsresult rv = principal->GetOriginNoSuffix(originNoSuffix);
+      if (NS_FAILED(rv)) {
+        continue;
+      }
+      CopyUTF8toUTF16(originNoSuffix, origin);
+    }
+
+    list->Add(origin);
+  }
+
+  return list.forget();
+}
+
 nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
                                      nsILoadGroup* aLoadGroup,
                                      nsISupports* aContainer,
@@ -3771,6 +3794,9 @@ nsresult Document::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
 
   // If this is an error page, don't inherit sandbox flags
   nsCOMPtr<nsILoadInfo> loadInfo = aChannel->LoadInfo();
+
+  SetAncestorOriginsList(ProduceAncestorOriginsList(loadInfo->AncestorPrincipals()));
+
   if (docShell && !loadInfo->GetLoadErrorPage()) {
     mSandboxFlags = loadInfo->GetSandboxFlags();
     WarnIfSandboxIneffective(docShell, mSandboxFlags, GetChannel());
@@ -17865,6 +17891,15 @@ void Document::UpdateLastRememberedSizes() {
       element->SetLastRememberedISize(iSize);
     }
   }
+}
+
+void Document::SetAncestorOriginsList(
+    RefPtr<DOMStringList> aAncestorOriginsList) {
+  mAncestorOriginsList = std::move(aAncestorOriginsList);
+}
+
+RefPtr<DOMStringList> Document::AncestorOrigins() const {
+  return mAncestorOriginsList;
 }
 
 void Document::NotifyLayerManagerRecreated() {

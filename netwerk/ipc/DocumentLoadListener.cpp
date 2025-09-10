@@ -2697,6 +2697,11 @@ nsresult DocumentLoadListener::DoOnStartRequest(nsIRequest* aRequest) {
     return NS_ERROR_UNEXPECTED;
   }
 
+  // Used as an ad-hoc solution for the "Let docReferrerPolicy be parentDoc’s policy container’s referrer policy." step
+  // in location.ancestorOrigins algorithm
+  const auto referrerPolicy = nsContentUtils::GetReferrerPolicyFromChannel(httpChannel);
+  loadingContext->SetReferrerPolicyFromHeaders(referrerPolicy);
+
   if (AppShutdown::IsInOrBeyond(ShutdownPhase::AppShutdownConfirmed)) {
     Cancel(NS_ERROR_ILLEGAL_DURING_SHUTDOWN,
            "Aborting OnStartRequest after shutdown started."_ns);

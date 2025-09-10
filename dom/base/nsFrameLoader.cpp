@@ -347,7 +347,7 @@ static already_AddRefed<BrowsingContext> CreateBrowsingContext(
   return BrowsingContext::CreateDetached(
       parentInner, nullptr, nullptr, frameName, parentBC->GetType(),
       {.createdDynamically = !aNetworkCreated,
-       .windowless = parentBC->Windowless()});
+       .windowless = parentBC->Windowless(), .referrerPolicy = aOwner->GetReferrerPolicyAsEnum()});
 }
 
 static bool InitialLoadIsRemote(Element* aOwner) {

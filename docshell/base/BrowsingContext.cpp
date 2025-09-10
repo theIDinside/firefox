@@ -378,6 +378,8 @@ already_AddRefed<BrowsingContext> BrowsingContext::CreateDetached(
   FieldValues fields;
   fields.Get<IDX_Name>() = aName;
 
+  fields.Get<IDX_ReferrerPolicy>() = static_cast<uint8_t>(aOptions.referrerPolicy);
+
   if (aOpener) {
     MOZ_DIAGNOSTIC_ASSERT(!aParent,
                           "new BC with both initial opener and parent");

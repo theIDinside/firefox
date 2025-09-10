@@ -3722,6 +3722,23 @@ void CanonicalBrowsingContext::MaybeReconstructActiveEntryList() {
   }
 }
 
+Span<const nsCOMPtr<nsIPrincipal>>
+CanonicalBrowsingContext::GetPossiblyRedactedAncestorOriginsList() const {
+  return mPossiblyRedactedAncestorOriginsList;
+}
+
+void CanonicalBrowsingContext::SetPossiblyRedactedAncestorOriginsList(nsTArray<nsCOMPtr<nsIPrincipal>> aAncestorOriginsList) {
+  mPossiblyRedactedAncestorOriginsList = std::move(aAncestorOriginsList);
+}
+
+void CanonicalBrowsingContext::SetReferrerPolicyFromHeaders(ReferrerPolicy aPolicy) {
+  mReferrerPolicyParsedFromHeaders = aPolicy;
+}
+
+ReferrerPolicy CanonicalBrowsingContext::GetReferrerPolicyParsedFromHeaders() const {
+  return mReferrerPolicyParsedFromHeaders;
+}
+
 EntryList* CanonicalBrowsingContext::GetActiveEntries() {
   if (!mActiveEntryList) {
     auto* shistory = static_cast<nsSHistory*>(GetSessionHistory());

@@ -854,6 +854,72 @@ void LoadInfo::ComputeAncestors(
   }
 }
 
+
+/* static */
+void LoadInfo::CreateRedactedAncestorOriginsFor(
+  dom::CanonicalBrowsingContext *aDocumentBrowsingContext,
+  nsTArray<nsCOMPtr<nsIPrincipal>> &aAncestorPrincipals)
+{
+  if (auto *parent = aDocumentBrowsingContext->GetParent()) {
+    // 4.3
+    auto parentAncestorOriginsList = parent->GetPossiblyRedactedAncestorOriginsList();
+
+    // 4.4
+    WindowGlobalParent* ancestorWGP = aDocumentBrowsingContext->GetParentWindowContext();
+
+    // 4.6
+    auto referrerPolicy = static_cast<ReferrerPolicy>(aDocumentBrowsingContext->GetReferrerPolicy());
+
+    // 4.9
+    if (referrerPolicy == ReferrerPolicy::_empty) {
+      referrerPolicy = parent->GetReferrerPolicyParsedFromHeaders();
+    }
+
+    // 4.10
+    bool masked = false;
+
+    // 4.11
+    if(referrerPolicy == ReferrerPolicy::No_referrer) {
+      masked = true;
+    }
+    // 4.12
+    if (referrerPolicy == ReferrerPolicy::Same_origin &&
+        !ancestorWGP->DocumentPrincipal()->Equals(
+            aDocumentBrowsingContext->GetCurrentWindowGlobal()
+                ->DocumentPrincipal())) {
+      masked = true;
+    }
+
+    // 4.13
+    if(masked) {
+      aAncestorPrincipals.AppendElement(nullptr);
+    } else {
+      auto *principal = ancestorWGP->DocumentPrincipal();
+      // when we serialize a "null principal", we leak information. Represent them as actual nullptr instead.
+      aAncestorPrincipals.AppendElement(principal->GetIsNullPrincipal() ? nullptr : principal);
+    }
+
+    // 4.15
+    for (const auto& ancestorOrigin : parentAncestorOriginsList) {
+      if(masked) {
+        // 4.15 a
+        if(ancestorOrigin->Equals(ancestorWGP->DocumentPrincipal())) {
+          aAncestorPrincipals.AppendElement(nullptr);
+        } else {
+          aAncestorPrincipals.AppendElement(ancestorOrigin);
+          masked = false;
+        }
+      } else {
+        // 4.15 b
+        aAncestorPrincipals.AppendElement(ancestorOrigin);
+      }
+    }
+  }
+  aDocumentBrowsingContext->SetPossiblyRedactedAncestorOriginsList(aAncestorPrincipals.Clone());
+}
+
+// Implements https://github.com/whatwg/html/pull/11560
+// static
 void LoadInfo::ComputeIsThirdPartyContext(nsPIDOMWindowOuter* aOuterWindow) {
   ExtContentPolicyType type =
       nsContentUtils::InternalContentPolicyTypeToExternal(

@@ -558,6 +558,28 @@ nsresult LoadInfoToLoadInfoArgs(nsILoadInfo* aLoadInfo,
     maybePolicyContainerToInherit.emplace(args);
   }
 
+  nsTArray<Maybe<PrincipalInfo>> ancestorOrigins;
+
+  if (XRE_IsParentProcess() &&
+      StaticPrefs::dom_location_ancestorOrigins_enabled()) {
+    nsTArray<nsCOMPtr<nsIPrincipal>> possiblyRedactedPrincipals;
+
+    if (RefPtr ctx = aLoadInfo->GetFrameBrowsingContext()) {
+      LoadInfo::CreateRedactedAncestorOriginsFor(ctx->Canonical(), possiblyRedactedPrincipals);
+    }
+
+    for (const auto& ancestorPrincipal : possiblyRedactedPrincipals) {
+      if (ancestorPrincipal == nullptr) {
+        ancestorOrigins.AppendElement(Nothing());
+      } else {
+        PrincipalInfo data;
+        rv = PrincipalToPrincipalInfo(ancestorPrincipal, &data);
+        NS_ENSURE_SUCCESS(rv, rv);
+        ancestorOrigins.AppendElement(Some(std::move(data)));
+      }
+    }
+  }
+
   *outLoadInfoArgs = LoadInfoArgs(
       loadingPrincipalInfo, triggeringPrincipalInfo, principalToInheritInfo,
       topLevelPrincipalInfo, optionalResultPrincipalURI, triggeringRemoteType,
@@ -611,7 +633,8 @@ nsresult LoadInfoToLoadInfoArgs(nsILoadInfo* aLoadInfo,
       aLoadInfo->GetIsMetaRefresh(), aLoadInfo->GetLoadingEmbedderPolicy(),
       aLoadInfo->GetIsOriginTrialCoepCredentiallessEnabledForTopLevel(),
       unstrippedURI, interceptionInfoArg, aLoadInfo->GetIsNewWindowTarget(),
-      aLoadInfo->GetUserNavigationInvolvement());
+      aLoadInfo->GetUserNavigationInvolvement(),
+      ancestorOrigins);
 
   return NS_OK;
 }
@@ -761,6 +784,16 @@ nsresult LoadInfoArgsToLoadInfo(const LoadInfoArgs& loadInfoArgs,
     if (parentBC) {
       LoadInfo::ComputeAncestors(parentBC->Canonical(), ancestorPrincipals,
                                  ancestorBrowsingContextIDs);
+    }
+  } else {
+    // Fill out (possibly redacted, nullptr => redacted) ancestor principals for Location.ancestorOrigins
+    for (const auto& principalInfo : loadInfoArgs.ancestorOrigins()) {
+      if(principalInfo.isNothing()) {
+        ancestorPrincipals.AppendElement(nullptr);
+      } else {
+        auto principal = PrincipalInfoToPrincipal(principalInfo.value());
+        ancestorPrincipals.AppendElement(principal.unwrap());
+      }
     }
   }
 

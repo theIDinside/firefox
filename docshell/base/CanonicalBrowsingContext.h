@@ -458,6 +458,11 @@ class CanonicalBrowsingContext final : public BrowsingContext {
 
   void MaybeReconstructActiveEntryList();
 
+  Span<const nsCOMPtr<nsIPrincipal>> GetPossiblyRedactedAncestorOriginsList() const;
+  void SetPossiblyRedactedAncestorOriginsList(nsTArray<nsCOMPtr<nsIPrincipal>> aAncestorOriginsList);
+  void SetReferrerPolicyFromHeaders(ReferrerPolicy aPolicy);
+  ReferrerPolicy GetReferrerPolicyParsedFromHeaders() const;
+
  protected:
   // Called when the browsing context is being discarded.
   void CanonicalDiscard();
@@ -677,6 +682,9 @@ class CanonicalBrowsingContext final : public BrowsingContext {
   bool mFullyDiscarded = false;
 
   nsTArray<std::function<void(uint64_t)>> mFullyDiscardedListeners;
+
+  nsTArray<nsCOMPtr<nsIPrincipal>> mPossiblyRedactedAncestorOriginsList;
+  ReferrerPolicy mReferrerPolicyParsedFromHeaders;
 };
 
 }  // namespace dom

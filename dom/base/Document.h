@@ -5253,6 +5253,9 @@ class Document : public nsINode,
  private:
   nsCString mContentType;
 
+  RefPtr<DOMStringList> mAncestorOriginsList;
+  void SetAncestorOriginsList(RefPtr<DOMStringList> aAncestorOriginsList);
+
  protected:
   // The document's security info
   nsCOMPtr<nsITransportSecurityInfo> mSecurityInfo;
@@ -5696,6 +5699,9 @@ class Document : public nsINode,
   UniquePtr<RadioGroupContainer> mRadioGroupContainer;
 
  public:
+  // https://html.spec.whatwg.org/#concept-location-ancestor-origins-list
+  RefPtr<DOMStringList> AncestorOrigins() const;
+
   // Needs to be public because the bindings code pokes at it.
   JS::ExpandoAndGeneration mExpandoAndGeneration;
 

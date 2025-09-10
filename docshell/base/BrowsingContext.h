@@ -21,6 +21,7 @@
 #include "mozilla/dom/MaybeDiscarded.h"
 #include "mozilla/dom/NavigationBinding.h"
 #include "mozilla/dom/PopupBlocker.h"
+#include "mozilla/dom/ReferrerPolicyBinding.h"
 #include "mozilla/dom/UserActivation.h"
 #include "mozilla/dom/BrowsingContextBinding.h"
 #include "mozilla/dom/ScreenOrientationBinding.h"
@@ -290,7 +291,9 @@ struct EmbedderColorSchemes {
   FIELD(IPAddressSpace, nsILoadInfo::IPAddressSpace)                          \
   /* This is true if we should redirect to an error page when inserting *     \
    * meta tags flagging adult content into our documents */                   \
-  FIELD(ParentalControlsEnabled, bool)
+  FIELD(ParentalControlsEnabled, bool)                                        \
+  /** Used to propagate embedding element's referrer policy */                \
+  FIELD(ReferrerPolicy, uint8_t)
 
 // BrowsingContext, in this context, is the cross process replicated
 // environment in which information about documents is stored. In
@@ -361,6 +364,7 @@ class BrowsingContext : public nsILoadContext, public nsWrapperCache {
     bool topLevelCreatedByWebContent = false;
     bool isForPrinting = false;
     bool windowless = false;
+    ReferrerPolicy referrerPolicy = ReferrerPolicy::_empty;
   };
 
   // Create a brand-new BrowsingContext object, but does not immediately attach

@@ -55,8 +55,6 @@
 
 using namespace mozilla::dom;
 
-mozilla::LazyLogModule gLoadInfoLog("LoadInfo");
-
 namespace mozilla::net {
 
 static nsCString CurrentRemoteType() {
@@ -574,7 +572,6 @@ LoadInfo::LoadInfo(dom::WindowGlobalParent* aParentWGP,
   CanonicalBrowsingContext* parentBC = aParentWGP->BrowsingContext();
   MOZ_ASSERT(parentBC);
   ComputeAncestors(parentBC, mAncestorPrincipals, mAncestorBrowsingContextIDs);
-  MOZ_LOG_FMT(gLoadInfoLog, LogLevel::Debug, "Ancestor principals computed: {}", mAncestorPrincipals.Length());
 
   RefPtr<WindowGlobalParent> topLevelWGP = aParentWGP->TopWindowContext();
 
@@ -863,8 +860,6 @@ void LoadInfo::CreateRedactedAncestorOrigins(
     dom::CanonicalBrowsingContext* aDocumentBrowsingContext,
     nsTArray<nsCOMPtr<nsIPrincipal>>& aAncestorPrincipals) {
   if (!StaticPrefs::dom_location_ancestorOrigins_enabled()) {
-    MOZ_LOG_FMT(gLoadInfoLog, LogLevel::Debug,
-                "Static pref for ancestorOrigins set to false");
     return;
   }
   nsTArray<uint64_t> ignore;

@@ -17885,7 +17885,7 @@ void Document::SetAncestorOriginsList(
   mAncestorOriginsList = std::move(aAncestorOriginsList);
 }
 
-RefPtr<DOMStringList> Document::GetAncestorOrigins() const {
+RefPtr<DOMStringList> Document::AncestorOrigins() const {
   return mAncestorOriginsList;
 }
 

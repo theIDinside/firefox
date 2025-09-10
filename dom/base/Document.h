@@ -5657,7 +5657,7 @@ class Document : public nsINode,
 
  public:
   // https://html.spec.whatwg.org/#concept-location-ancestor-origins-list
-  RefPtr<DOMStringList> GetAncestorOrigins() const;
+  RefPtr<DOMStringList> AncestorOrigins() const;
 
   // Needs to be public because the bindings code pokes at it.
   JS::ExpandoAndGeneration mExpandoAndGeneration;

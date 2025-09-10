@@ -45,5 +45,6 @@ interface Location {
   undefined reload(optional boolean forceget = false);
 
   // https://html.spec.whatwg.org/#dom-location-ancestororigins
-  [LegacyUnforgeable, SameObject, Pref="dom.location.ancestorOrigins.enabled"] readonly attribute DOMStringList ancestorOrigins;
+  [Throws, LegacyUnforgeable, SameObject, GetterNeedsSubjectPrincipal, Pref="dom.location.ancestorOrigins.enabled"]
+  readonly attribute DOMStringList ancestorOrigins;
 };

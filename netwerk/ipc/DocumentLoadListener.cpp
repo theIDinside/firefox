@@ -78,7 +78,6 @@
 #endif /* ANDROID */
 
 mozilla::LazyLogModule gDocumentChannelLog("DocumentChannel");
-extern mozilla::LazyLogModule gLoadInfoLog;
 #define LOG(fmt) MOZ_LOG(gDocumentChannelLog, mozilla::LogLevel::Verbose, fmt)
 
 extern mozilla::LazyLogModule gSHIPBFCacheLog;

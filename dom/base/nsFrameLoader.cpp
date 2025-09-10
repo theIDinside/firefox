@@ -143,8 +143,6 @@ using ViewID = ScrollableLayerGuid::ViewID;
 
 using PrintPreviewResolver = std::function<void(const PrintPreviewResultInfo&)>;
 
-extern mozilla::LazyLogModule gLoadInfoLog;
-
 // Bug 8065: Limit content frame depth to some reasonable level. This
 // does not count chrome frames when determining depth, nor does it
 // prevent chrome recursion.  Number is fairly arbitrary, but meant to

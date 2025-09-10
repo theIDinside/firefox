@@ -176,8 +176,16 @@ void Location::SetHash(const nsACString& aHash, nsIPrincipal& aSubjectPrincipal,
   SetURI(uri, aSubjectPrincipal, aRv);
 }
 
-RefPtr<DOMStringList> Location::AncestorOrigins() const {
-  return mInnerWindow->GetDoc()->GetAncestorOrigins();
+RefPtr<DOMStringList> Location::GetAncestorOrigins(
+    nsIPrincipal& aSubjectPrincipal, ErrorResult& aRv) {
+  if (auto* doc = mInnerWindow->GetDoc()) {
+    if (!CallerSubsumes(&aSubjectPrincipal)) {
+      aRv.Throw(NS_ERROR_DOM_SECURITY_ERR);
+      return {};
+    }
+    return doc->AncestorOrigins();
+  }
+  return RefPtr<DOMStringList>{};
 }
 
 void Location::GetHost(nsACString& aHost, nsIPrincipal& aSubjectPrincipal,

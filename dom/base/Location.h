@@ -103,7 +103,8 @@ class Location final : public nsISupports,
   void SetHash(const nsACString& aHash, nsIPrincipal& aSubjectPrincipal,
                ErrorResult& aError);
 
-  RefPtr<DOMStringList> AncestorOrigins() const;
+  RefPtr<DOMStringList> GetAncestorOrigins(nsIPrincipal& aSubjectPrincipal,
+                                           ErrorResult& aRv);
 
   nsPIDOMWindowInner* GetParentObject() const { return mInnerWindow; }
 

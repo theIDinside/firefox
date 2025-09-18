@@ -26,6 +26,7 @@
   "nsIEventListenerService": "els",
   "nsIFOG": "fog",
   "nsIFocusManager": "focus",
+  "nsIFullscreenService": "fullscreen",
   "nsIIOService": "io",
   "nsILoadContextInfoFactory": "loadContextInfo",
   "nsILocalStorageManager": "domStorageManager",

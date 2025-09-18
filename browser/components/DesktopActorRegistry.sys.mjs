@@ -472,6 +472,7 @@ let JSWINDOWACTORS = {
 
     messageManagerGroups: ["browsers"],
     allFrames: true,
+    enablePreference: "full-screen-api.service-manager.disabled",
   },
 
   EncryptedMedia: {

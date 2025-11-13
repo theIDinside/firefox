@@ -5031,17 +5031,15 @@ nsresult nsDocShell::SetCurScrollPosEx(int32_t aCurHorizontalPos,
   return NS_OK;
 }
 
-void nsDocShell::RestoreScrollPosFromActiveSHE() {
+void nsDocShell::RestoreScrollPosFromTargetSHI(
+    mozilla::dom::SessionHistoryInfo* aTarget) {
+  MOZ_DIAGNOSTIC_ASSERT(mozilla::SessionHistoryInParent());
   nscoord bx = 0;
   nscoord by = 0;
-  if ((mozilla::SessionHistoryInParent() ? !!mActiveEntry : !!mOSHE)) {
-    if (mozilla::SessionHistoryInParent()) {
-      mActiveEntry->GetScrollPosition(&bx, &by);
-    } else {
-      mOSHE->GetScrollPosition(&bx, &by);
-    }
-    SetCurScrollPosEx(bx, by);
+  if (aTarget) {
+    aTarget->GetScrollPosition(&bx, &by);
   }
+  SetCurScrollPosEx(bx, by);
 }
 
 void nsDocShell::SetScrollbarPreference(mozilla::ScrollbarPreference aPref) {
@@ -9453,10 +9451,30 @@ static void MaybeConvertToReplaceLoad(nsDocShellLoadState* aLoadState,
   }
 }
 
+static void UpdateScrollPositionOfCurrentEntryWhenNavigatingAway(
+    nsDocShell* aShell) {
+  nsPoint scrollPos = aShell->GetCurScrollPos();
+  if (RefPtr doc = aShell->GetDocument()) {
+    if (nsCOMPtr<nsPIDOMWindowInner> window = doc->GetInnerWindow()) {
+      if (RefPtr navigation = window->Navigation()) {
+        if (RefPtr<NavigationHistoryEntry> entry =
+                navigation->GetCurrentEntry()) {
+          auto* historyInfo = entry->SessionHistoryInfo();
+          historyInfo->SetScrollPosition(scrollPos.x, scrollPos.y);
+        }
+      }
+    }
+  }
+}
+
 // InternalLoad performs several of the steps from
 // https://html.spec.whatwg.org/#navigate.
 nsresult nsDocShell::InternalLoad(nsDocShellLoadState* aLoadState,
                                   Maybe<uint32_t> aCacheKey) {
+  // We're loading some new destination, therefore update the current
+  // SessionHistoryInfo with our current scroll position.
+  UpdateScrollPositionOfCurrentEntryWhenNavigatingAway(this);
+
   MOZ_ASSERT(aLoadState, "need a load state!");
   MOZ_ASSERT(aLoadState->TriggeringPrincipal(),
              "need a valid TriggeringPrincipal");

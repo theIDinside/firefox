@@ -1333,7 +1333,13 @@ struct NavigationWaitForAllScope final : public nsISupports,
             // This is not in the spec, but both Chrome and Safari does this or
             // something similar.
             MOZ_ASSERT(entry->Index() >= 0);
+            if(RefPtr current = mNavigation->GetCurrentEntry()) {
+              nsDocShell* docshell = static_cast<nsDocShell*>(mNavigation->GetAssociatedDocument()->GetDocShell());
+              nsPoint scrollPos = docshell->GetCurScrollPos();
+              current->SessionHistoryInfo()->SetScrollPosition(scrollPos.x, scrollPos.y);
+            }
             mNavigation->SetCurrentEntryIndex(entry->SessionHistoryInfo());
+            entry->SetScrollRestoreDataUpToDate(true);
           }
           break;
         default:

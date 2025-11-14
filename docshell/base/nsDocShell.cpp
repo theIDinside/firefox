@@ -9460,7 +9460,10 @@ static void UpdateScrollPositionOfCurrentEntryWhenNavigatingAway(
         if (RefPtr<NavigationHistoryEntry> entry =
                 navigation->GetCurrentEntry()) {
           auto* historyInfo = entry->SessionHistoryInfo();
-          historyInfo->SetScrollPosition(scrollPos.x, scrollPos.y);
+          if (entry->NeedsUpdatedScrollPosition()) {
+            historyInfo->SetScrollPosition(scrollPos.x, scrollPos.y);
+          }
+          entry->SetScrollRestoreDataUpToDate();
         }
       }
     }

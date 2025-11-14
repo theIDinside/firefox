@@ -7666,7 +7666,9 @@ mozilla::ipc::IPCResult ContentParent::RecvSessionHistoryEntryScrollPosition(
 
   SessionHistoryEntry* entry =
       aContext.get_canonical()->GetActiveSessionHistoryEntry();
+  printf("---- RecvSessionHistoryEntryScrollPosition %d,%d\n", aX, aY);
   if (entry) {
+    RefPtr r = entry->GetShistory();
     entry->SetScrollPosition(aX, aY);
   }
   return IPC_OK();

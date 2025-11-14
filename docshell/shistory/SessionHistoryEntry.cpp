@@ -484,20 +484,30 @@ void SessionHistoryEntry::RemoveLoadId(uint64_t aLoadId) {
   sLoadIdToEntry->Remove(aLoadId);
 }
 
+#define LOG_POS \
+int x = 0; int y = 0; \
+mInfo->GetScrollPosition(&x, &y); \
+printf("---- " __FILE__ ":%d @ %s: %d, %d for %s\n", __LINE__, __PRETTY_FUNCTION__, x, y, GetURI().take() ? GetURI().take()->GetSpecOrDefault().get() : "");
+
+
+
 SessionHistoryEntry::SessionHistoryEntry()
     : mInfo(new SessionHistoryInfo()), mID(++gEntryID) {
   MOZ_ASSERT(mozilla::SessionHistoryInParent());
+  LOG_POS
 }
 
 SessionHistoryEntry::SessionHistoryEntry(nsDocShellLoadState* aLoadState,
                                          nsIChannel* aChannel)
     : mInfo(new SessionHistoryInfo(aLoadState, aChannel)), mID(++gEntryID) {
   MOZ_ASSERT(mozilla::SessionHistoryInParent());
+  LOG_POS
 }
 
 SessionHistoryEntry::SessionHistoryEntry(SessionHistoryInfo* aInfo)
     : mInfo(MakeUnique<SessionHistoryInfo>(*aInfo)), mID(++gEntryID) {
   MOZ_ASSERT(mozilla::SessionHistoryInParent());
+  LOG_POS
 }
 
 SessionHistoryEntry::SessionHistoryEntry(const SessionHistoryEntry& aEntry)
@@ -506,6 +516,7 @@ SessionHistoryEntry::SessionHistoryEntry(const SessionHistoryEntry& aEntry)
       mID(aEntry.mID),
       mBCHistoryLength(aEntry.mBCHistoryLength) {
   MOZ_ASSERT(mozilla::SessionHistoryInParent());
+  LOG_POS
 }
 
 SessionHistoryEntry::~SessionHistoryEntry() {
@@ -1080,6 +1091,7 @@ NS_IMETHODIMP
 SessionHistoryEntry::SetScrollPosition(int32_t aX, int32_t aY) {
   mInfo->mScrollPositionX = aX;
   mInfo->mScrollPositionY = aY;
+  LOG_POS
   return NS_OK;
 }
 

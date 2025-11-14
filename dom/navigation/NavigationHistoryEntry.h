@@ -53,6 +53,8 @@ class NavigationHistoryEntry final : public DOMEventTargetHelper {
 
   void ResetIndexForDisposal();
 
+  bool NeedsUpdatedScrollPosition() const;
+  void SetScrollRestoreDataUpToDate(bool aIsUpToDate = false);
  private:
   ~NavigationHistoryEntry();
 
@@ -63,6 +65,8 @@ class NavigationHistoryEntry final : public DOMEventTargetHelper {
   // https://html.spec.whatwg.org/#nhe-she
   UniquePtr<class SessionHistoryInfo> mSHInfo;
   int64_t mIndex;
+  // SHIP and Navigation API fight each other over synchronization issues.
+  bool mScrollDataUpToDate = false;
 };
 
 }  // namespace mozilla::dom

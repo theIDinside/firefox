@@ -177,4 +177,13 @@ nsIStructuredCloneContainer* NavigationHistoryEntry::GetNavigationAPIState()
 
 void NavigationHistoryEntry::ResetIndexForDisposal() { mIndex = -1; }
 
+bool NavigationHistoryEntry::NeedsUpdatedScrollPosition() const {
+  return !mScrollDataUpToDate;
+}
+
+void NavigationHistoryEntry::SetScrollRestoreDataUpToDate(bool aIsUpToDate)
+{
+  mScrollDataUpToDate = aIsUpToDate;
+}
+
 }  // namespace mozilla::dom

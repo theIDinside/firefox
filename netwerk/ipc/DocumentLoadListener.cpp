@@ -16,6 +16,7 @@
 #include "mozilla/DynamicFpiNavigationHeuristic.h"
 #include "mozilla/Components.h"
 #include "mozilla/LoadInfo.h"
+#include "mozilla/ipc/PBackgroundSharedTypes.h"
 #include "mozilla/NullPrincipal.h"
 #include "mozilla/RefPtr.h"
 #include "mozilla/ResultVariant.h"
@@ -1622,6 +1623,77 @@ void DocumentLoadListener::RegisterEarlyHintLinksAndGetConnectArgs(
   mEarlyHintsService.RegisterLinksAndGetConnectArgs(aCpId, aOutLinks);
 }
 
+static void CreateRedactedAncestorOriginsFor(
+  dom::ReferrerPolicy aParentDocPolicyContainerReferrerPolicy,
+  dom::CanonicalBrowsingContext *aDocumentBrowsingContext,
+  nsTArray<nsCOMPtr<nsIPrincipal>> &aAncestorPrincipals)
+{
+  if (auto* parent = aDocumentBrowsingContext->GetParent()) {
+    MOZ_DIAGNOSTIC_ASSERT(!parent->IsChrome());
+    // 4.3
+    auto parentAncestorOriginsList =
+        parent->GetPossiblyRedactedAncestorOriginsList();
+
+    // 4.4
+    WindowGlobalParent* ancestorWGP =
+        aDocumentBrowsingContext->GetParentWindowContext();
+
+    // 4.6
+    auto referrerPolicy = static_cast<ReferrerPolicy>(
+        aDocumentBrowsingContext->GetReferrerPolicy());
+
+    // 4.9
+    if (referrerPolicy == ReferrerPolicy::_empty) {
+      referrerPolicy = aParentDocPolicyContainerReferrerPolicy;
+    }
+
+    // 4.10
+    bool masked = false;
+
+    // 4.11
+    if (referrerPolicy == ReferrerPolicy::No_referrer) {
+      masked = true;
+    }
+    // 4.12
+    if (referrerPolicy == ReferrerPolicy::Same_origin &&
+        !ancestorWGP->DocumentPrincipal()->Equals(
+            aDocumentBrowsingContext->GetCurrentWindowGlobal()
+                ->DocumentPrincipal())) {
+      masked = true;
+    }
+
+    // 4.13
+    if (masked) {
+      aAncestorPrincipals.AppendElement(nullptr);
+    } else {
+      auto* principal = ancestorWGP->DocumentPrincipal();
+      // when we serialize a "null principal", we leak information. Represent
+      // them as actual nullptr instead.
+      aAncestorPrincipals.AppendElement(
+          principal->GetIsNullPrincipal() ? nullptr : principal);
+    }
+
+    // 4.15
+    for (const auto& ancestorOrigin : parentAncestorOriginsList) {
+      if (masked) {
+        // 4.15 a
+        if (ancestorOrigin &&
+            ancestorOrigin->Equals(ancestorWGP->DocumentPrincipal())) {
+          aAncestorPrincipals.AppendElement(nullptr);
+        } else {
+          aAncestorPrincipals.AppendElement(ancestorOrigin);
+          masked = false;
+        }
+      } else {
+        // 4.15 b
+        aAncestorPrincipals.AppendElement(ancestorOrigin);
+      }
+    }
+  }
+  aDocumentBrowsingContext->SetPossiblyRedactedAncestorOriginsList(
+      aAncestorPrincipals.Clone());
+}
+
 void DocumentLoadListener::SerializeRedirectData(
     RedirectToRealChannelArgs& aArgs, bool aIsCrossProcess,
     uint32_t aRedirectFlags, uint32_t aLoadFlags,
@@ -1689,6 +1761,43 @@ void DocumentLoadListener::SerializeRedirectData(
 
   MOZ_ALWAYS_SUCCEEDS(
       ipc::LoadInfoToLoadInfoArgs(redirectLoadInfo, &aArgs.loadInfo()));
+
+  auto& ancestorOrigins = aArgs.loadInfo().ancestorOrigins();
+
+  if (XRE_IsParentProcess() &&
+      StaticPrefs::dom_location_ancestorOrigins_enabled()) {
+    nsTArray<nsCOMPtr<nsIPrincipal>> possiblyRedactedPrincipals;
+
+    auto parentDocPolicyContainerRefererrerPolicy = dom::ReferrerPolicy::_empty;
+
+    // step 7 says "Let docReferrerPolicy be parentDoc’s policy container’s referrer policy."
+    // and this refers to https://html.spec.whatwg.org/#document-state-history-policy-container
+    // which is a value that should be reflected in this channel's referrer info.
+    if (nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(mChannel)) {
+      if(RefPtr refInfo = httpChannel->GetReferrerInfo()) {
+        parentDocPolicyContainerRefererrerPolicy = refInfo->ReferrerPolicy();
+      }
+    }
+
+    if (RefPtr ctx = redirectLoadInfo->GetFrameBrowsingContext()) {
+      CreateRedactedAncestorOriginsFor(parentDocPolicyContainerRefererrerPolicy, ctx->Canonical(), possiblyRedactedPrincipals);
+    }
+
+    for (const auto& ancestorPrincipal : possiblyRedactedPrincipals) {
+      if (ancestorPrincipal == nullptr) {
+        ancestorOrigins.AppendElement(Nothing());
+      } else {
+        ipc::PrincipalInfo data;
+        auto rv = PrincipalToPrincipalInfo(ancestorPrincipal, &data);
+        // Can this ever really fail?
+        if(!NS_SUCCEEDED(rv)) {
+          ancestorOrigins.AppendElement(Nothing());
+        } else {
+          ancestorOrigins.AppendElement(Some(std::move(data)));
+        }
+      }
+    }
+  }
 
   mChannel->GetOriginalURI(getter_AddRefs(aArgs.originalURI()));
 

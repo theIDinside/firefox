@@ -558,28 +558,6 @@ nsresult LoadInfoToLoadInfoArgs(nsILoadInfo* aLoadInfo,
     maybePolicyContainerToInherit.emplace(args);
   }
 
-  nsTArray<Maybe<PrincipalInfo>> ancestorOrigins;
-
-  if (XRE_IsParentProcess() &&
-      StaticPrefs::dom_location_ancestorOrigins_enabled()) {
-    nsTArray<nsCOMPtr<nsIPrincipal>> possiblyRedactedPrincipals;
-
-    if (RefPtr ctx = aLoadInfo->GetFrameBrowsingContext()) {
-      LoadInfo::CreateRedactedAncestorOriginsFor(ctx->Canonical(), possiblyRedactedPrincipals);
-    }
-
-    for (const auto& ancestorPrincipal : possiblyRedactedPrincipals) {
-      if (ancestorPrincipal == nullptr) {
-        ancestorOrigins.AppendElement(Nothing());
-      } else {
-        PrincipalInfo data;
-        rv = PrincipalToPrincipalInfo(ancestorPrincipal, &data);
-        NS_ENSURE_SUCCESS(rv, rv);
-        ancestorOrigins.AppendElement(Some(std::move(data)));
-      }
-    }
-  }
-
   *outLoadInfoArgs = LoadInfoArgs(
       loadingPrincipalInfo, triggeringPrincipalInfo, principalToInheritInfo,
       topLevelPrincipalInfo, optionalResultPrincipalURI, triggeringRemoteType,
@@ -634,7 +612,7 @@ nsresult LoadInfoToLoadInfoArgs(nsILoadInfo* aLoadInfo,
       aLoadInfo->GetIsOriginTrialCoepCredentiallessEnabledForTopLevel(),
       unstrippedURI, interceptionInfoArg, aLoadInfo->GetIsNewWindowTarget(),
       aLoadInfo->GetUserNavigationInvolvement(),
-      ancestorOrigins);
+      {});
 
   return NS_OK;
 }

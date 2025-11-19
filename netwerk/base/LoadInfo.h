@@ -325,10 +325,6 @@ class LoadInfo final : public nsILoadInfo {
       nsTArray<nsCOMPtr<nsIPrincipal>>& aAncestorPrincipals,
       nsTArray<uint64_t>& aBrowsingContextIDs);
 
-  static void CreateRedactedAncestorOriginsFor(
-       dom::CanonicalBrowsingContext *aDocumentBrowsingContext,
-       nsTArray<nsCOMPtr<nsIPrincipal>> &aAncestorPrincipals);
-
   // create an exact copy of the loadinfo
   already_AddRefed<nsILoadInfo> Clone() const;
 

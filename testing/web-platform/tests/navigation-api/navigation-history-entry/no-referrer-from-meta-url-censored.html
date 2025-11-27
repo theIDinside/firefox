@@ -12,13 +12,14 @@ promise_test(async (t) => {
   assert_equals(i.contentWindow.navigation.entries().length, 2);
 
   // The entries for no-referrer.html should have the url censored.
+  dump("Begin navigation to /common/blank.html\n");
   i.contentWindow.navigation.navigate("/common/blank.html");
   await new Promise(r => i.onload = () => t.step_timeout(r, 0));
   assert_equals(i.contentWindow.navigation.entries().length, 3);
   assert_equals(i.contentWindow.navigation.currentEntry.index, 2);
-  assert_equals(i.contentWindow.navigation.entries()[0].url, null);
-  assert_equals(i.contentWindow.navigation.entries()[1].url, null);
-  assert_equals(i.contentWindow.navigation.activation.from.url, null);
+  assert_equals(i.contentWindow.navigation.entries()[0].url, "");
+  assert_equals(i.contentWindow.navigation.entries()[1].url, "");
+  assert_equals(i.contentWindow.navigation.activation.from.url, "");
 
   // Navigating back to no-referrer.html should uncensor the urls.
   i.contentWindow.navigation.back();

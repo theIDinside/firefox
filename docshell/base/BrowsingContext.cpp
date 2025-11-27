@@ -2411,7 +2411,11 @@ BrowsingContext::CheckURLAndCreateLoadState(nsIURI* aURI,
   nsCOMPtr<nsIPrincipal> principal = doc->NodePrincipal();
 
   triggeringPrincipal = doc->NodePrincipal();
-  referrerPolicy = doc->GetReferrerPolicy();
+  // The referrer policy by which we will fetch the document with, becoming the
+  // new document's request referrer policy.
+  printf("---- %d: GetDoc URI: %s\n", getpid(), GetDocument()->GetDocumentURI()->GetSpecOrDefault().get());
+  printf("---- %d: doc URI: %s\n", getpid(), doc->GetDocumentURI()->GetSpecOrDefault().get());
+  referrerPolicy = GetDocument()->GetReferrerPolicy();
 
   bool urisEqual = false;
   if (docOriginalURI && docCurrentURI && principal) {

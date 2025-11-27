@@ -4359,6 +4359,8 @@ nsresult Document::InitReferrerInfo(nsIChannel* aChannel) {
   }
 
   if (nsCOMPtr<nsIReferrerInfo> referrerInfo = httpChannel->GetReferrerInfo()) {
+    // We're fetching this document with this policy. It is the document's "request referrer policy".
+    mRequestReferrerPolicy = referrerInfo->ReferrerPolicy();
     SetReferrerInfo(referrerInfo);
   }
 

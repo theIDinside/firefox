@@ -43,7 +43,8 @@ void NavigationHistoryEntry::GetUrl(nsAString& aResult) const {
   MOZ_DIAGNOSTIC_ASSERT(GetAssociatedDocument());
 
   if (!SameDocument()) {
-    auto referrerPolicy = GetAssociatedDocument()->ReferrerPolicy();
+    const auto referrerPolicy =
+        GetAssociatedDocument()->RequestReferrerPolicy();
     if (referrerPolicy == ReferrerPolicy::No_referrer ||
         referrerPolicy == ReferrerPolicy::Origin) {
       return;

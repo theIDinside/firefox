@@ -4449,6 +4449,8 @@ class Document : public nsINode,
   static void GetAllInProcessDocuments(
       nsTArray<RefPtr<Document>>& aAllDocuments);
 
+  enum ReferrerPolicy RequestReferrerPolicy() const { return mRequestReferrerPolicy; }
+
  protected:
   // Returns the WindowContext for the document that we will contribute
   // page use counters to.
@@ -5293,6 +5295,9 @@ class Document : public nsINode,
 
   nsCOMPtr<nsIContentSecurityPolicy> mPreloadCSP;
   RefPtr<PolicyContainer> mPolicyContainer;
+
+  // The policy by which this document was fetched *with*, not the policy it uses to fetch.
+  enum ReferrerPolicy mRequestReferrerPolicy = ReferrerPolicy::_empty;
 
  private:
   nsCString mContentType;

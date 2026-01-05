@@ -27,6 +27,8 @@ class PrincipalInfo;
 
 namespace dom {
 
+class CanonicalBrowsingContext;
+
 class ReportingHeader final : public nsIObserver,
                               public nsITimerCallback,
                               public nsINamed {
@@ -76,18 +78,19 @@ class ReportingHeader final : public nsIObserver,
       const mozilla::ipc::PrincipalInfo& aPrincipalInfo,
       nsACString& aEndpointURI);
 
-  static void GetEndpointForReport(const nsAString& aGroupName,
-                                   nsIPrincipal* aPrincipal,
-                                   nsACString& aEndpointURI);
+  static void GetEndpointForReport(
+      const nsAString& aGroupName,
+      mozilla::dom::CanonicalBrowsingContext* aBrowsingContext,
+      nsIPrincipal* aPrincipal, nsACString& aEndpointURI);
 
   // Used for network-error-logging
   // If no endpoint is found for aPrincipal and aIncludeSubdomains is true
   // we'll check all parent origins for groups that have mIncludeSubdomains
   // equal to true.
-  static void GetEndpointForReportIncludeSubdomains(const nsAString& aGroupName,
-                                                    nsIPrincipal* aPrincipal,
-                                                    bool aIncludeSubdomains,
-                                                    nsACString& aEndpointURI);
+  static void GetEndpointForReportIncludeSubdomains(
+      const nsAString& aGroupName, nsIPrincipal* aPrincipal,
+      mozilla::dom::CanonicalBrowsingContext* aBrowsingContext,
+      bool aIncludeSubdomains, nsACString& aEndpointURI);
 
   static void RemoveEndpoint(const nsAString& aGroupName,
                              const nsACString& aEndpointURL,

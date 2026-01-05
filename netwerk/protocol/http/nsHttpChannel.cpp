@@ -4615,8 +4615,10 @@ void nsHttpChannel::MaybeGenerateNELReport() {
   report->GetUrl(url);
 
   nsAutoCString endpointURL;
+  RefPtr<BrowsingContext> bc = mLoadInfo->GetBrowsingContext();
   ReportingHeader::GetEndpointForReportIncludeSubdomains(
-      group, channelPrincipal, /* includeSubdomains */ true, endpointURL);
+      group, channelPrincipal, bc ? bc->Canonical() : nullptr,
+      /* includeSubdomains */ true, endpointURL);
   if (endpointURL.IsEmpty()) {
     return;
   }

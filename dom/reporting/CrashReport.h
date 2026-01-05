@@ -13,9 +13,12 @@ class nsIPrincipal;
 
 namespace mozilla::dom {
 
+class CanonicalBrowsingContext;
+
 class CrashReport {
  public:
-  static bool Deliver(nsIPrincipal* aPrincipal, bool aIsOOM);
+  static bool Deliver(CanonicalBrowsingContext* aBrowsingContext,
+                      nsIPrincipal* aPrincipal, bool aIsOOM);
 };
 
 }  // namespace mozilla::dom

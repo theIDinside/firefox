@@ -7,6 +7,7 @@
 #include "mozilla/dom/CrashReport.h"
 
 #include "mozilla/JSONStringWriteFuncs.h"
+#include "mozilla/dom/CanonicalBrowsingContext.h"
 #include "mozilla/dom/Navigator.h"
 #include "mozilla/dom/ReportDeliver.h"
 #include "mozilla/dom/ReportingHeader.h"
@@ -17,12 +18,13 @@
 namespace mozilla::dom {
 
 /* static */
-bool CrashReport::Deliver(nsIPrincipal* aPrincipal, bool aIsOOM) {
+bool CrashReport::Deliver(CanonicalBrowsingContext* aBrowsingContext,
+                          nsIPrincipal* aPrincipal, bool aIsOOM) {
   MOZ_ASSERT(aPrincipal);
 
   nsAutoCString endpoint_url;
-  ReportingHeader::GetEndpointForReport(u"default"_ns, aPrincipal,
-                                        endpoint_url);
+  ReportingHeader::GetEndpointForReport(u"default"_ns, aBrowsingContext,
+                                        aPrincipal, endpoint_url);
   if (endpoint_url.IsEmpty()) {
     return false;
   }

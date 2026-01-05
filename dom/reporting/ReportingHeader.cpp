@@ -15,6 +15,7 @@
 #include "mozilla/Services.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPtr.h"
+#include "mozilla/dom/CanonicalBrowsingContext.h"
 #include "mozilla/dom/ReportingBinding.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/SimpleGlobalObject.h"
@@ -42,6 +43,21 @@ namespace {
 StaticRefPtr<ReportingHeader> gReporting;
 
 }  // namespace
+
+static Maybe<nsAutoCString> CreateEndpointsKey(
+    CanonicalBrowsingContext* aBrowsingContext, nsIPrincipal* aPrincipal) {
+  MOZ_DIAGNOSTIC_ASSERT(aPrincipal);
+  nsAutoCString endpointsKey;
+  const nsresult rv = aPrincipal->GetOrigin(endpointsKey);
+  if (NS_FAILED(rv)) {
+    return Nothing();
+  }
+
+  if (aBrowsingContext) {
+    endpointsKey.AppendFmt("|{}", aBrowsingContext->Id());
+  }
+  return Some(std::move(endpointsKey));
+}
 
 /* static */
 void ReportingHeader::Initialize() {
@@ -180,9 +196,13 @@ void ReportingHeader::ReportingFromChannel(nsIHttpChannel* aChannel) {
     return;
   }
 
-  nsAutoCString origin;
-  rv = principal->GetOrigin(origin);
-  if (NS_WARN_IF(NS_FAILED(rv))) {
+  nsCOMPtr<nsILoadInfo> loadInfo = aChannel->LoadInfo();
+  MOZ_DIAGNOSTIC_ASSERT(loadInfo);
+
+  RefPtr<BrowsingContext> loadingContext = loadInfo->GetBrowsingContext();
+  Maybe<nsAutoCString> endpointsKey = CreateEndpointsKey(
+      loadingContext ? loadingContext->Canonical() : nullptr, principal);
+  if (NS_WARN_IF(endpointsKey.isNothing())) {
     return;
   }
 
@@ -199,11 +219,12 @@ void ReportingHeader::ReportingFromChannel(nsIHttpChannel* aChannel) {
   }
 
   if (!client) {
+    mOrigins.Remove(*endpointsKey);
     return;
   }
 
   // Here we override the previous data.
-  mOrigins.InsertOrUpdate(origin, std::move(client));
+  mOrigins.InsertOrUpdate(*endpointsKey, std::move(client));
 
   MaybeCreateCleanupTimer();
 }
@@ -595,19 +616,22 @@ void ReportingHeader::GetEndpointForReport(
   }
 
   nsCOMPtr<nsIPrincipal> principal = principalOrErr.unwrap();
-  GetEndpointForReport(aGroupName, principal, aEndpointURI);
+  GetEndpointForReport(aGroupName, nullptr, principal, aEndpointURI);
 }
 
 /* static */
-void ReportingHeader::GetEndpointForReport(const nsAString& aGroupName,
-                                           nsIPrincipal* aPrincipal,
-                                           nsACString& aEndpointURI) {
+void ReportingHeader::GetEndpointForReport(
+    const nsAString& aGroupName,
+    mozilla::dom::CanonicalBrowsingContext* aBrowsingContext,
+    nsIPrincipal* aPrincipal, nsACString& aEndpointURI) {
   return GetEndpointForReportIncludeSubdomains(
-      aGroupName, aPrincipal, /* includeSubdomains */ false, aEndpointURI);
+      aGroupName, aPrincipal, aBrowsingContext, /* includeSubdomains */ false,
+      aEndpointURI);
 }
 /* static */
 void ReportingHeader::GetEndpointForReportIncludeSubdomains(
     const nsAString& aGroupName, nsIPrincipal* aPrincipal,
+    mozilla::dom::CanonicalBrowsingContext* aBrowsingContext,
     bool aIncludeSubdomains, nsACString& aEndpointURI) {
   MOZ_ASSERT(aEndpointURI.IsEmpty());
 
@@ -619,13 +643,13 @@ void ReportingHeader::GetEndpointForReportIncludeSubdomains(
   bool mustHaveIncludeSubdomains = false;
 
   do {
-    nsAutoCString origin;
-    nsresult rv = principal->GetOrigin(origin);
-    if (NS_WARN_IF(NS_FAILED(rv))) {
+    Maybe<nsAutoCString> endpointsKey =
+        CreateEndpointsKey(aBrowsingContext, principal);
+    if (NS_WARN_IF(endpointsKey.isNothing())) {
       return;
     }
 
-    Client* client = gReporting->mOrigins.Get(origin);
+    Client* client = gReporting->mOrigins.Get(*endpointsKey);
     if (client) {
       const auto [begin, end] = client->mGroups.NonObservingRange();
       const auto foundIt = std::find_if(

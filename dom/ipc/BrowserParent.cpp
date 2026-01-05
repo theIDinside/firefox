@@ -843,7 +843,7 @@ void BrowserParent::ActorDestroy(ActorDestroyReason why) {
 
       if (principal) {
         // TODO: Flag out-of-memory crashes appropriately.
-        CrashReport::Deliver(principal, /* aIsOOM */ false);
+        CrashReport::Deliver(mBrowsingContext, principal, /* aIsOOM */ false);
       }
     }
   }

@@ -328,6 +328,15 @@ Element* DocumentOrShadowRoot::GetFullscreenElement() const {
   return Element::FromNodeOrNull(Retarget(element));
 }
 
+Element* DocumentOrShadowRoot::GetPictureInPictureElement() const {
+  if (!AsNode().IsInComposedDoc()) {
+    return nullptr;
+  }
+  Document* doc = AsNode().OwnerDoc();
+  Element* element = doc->GetPictureInPictureElementInternal();
+  return Element::FromNodeOrNull(nsContentUtils::Retarget(element, &AsNode()));
+}
+
 namespace {
 
 using FrameForPointOption = nsLayoutUtils::FrameForPointOption;

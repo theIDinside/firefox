@@ -1,0 +1,15 @@
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "nsISupports.idl"
+
+webidl Element;
+
+[scriptable, uuid(acfb3c87-c1cd-4d82-b1ba-0b7c4ecb0318)]
+interface nsIPictureInPictureFunctions : nsISupports {
+    [implicit_jscontext]
+    Promise RequestPictureInPictureWindow(in Element videoElement, in jsval pictureInPictureWindow);
+};

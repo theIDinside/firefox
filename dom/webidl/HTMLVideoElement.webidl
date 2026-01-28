@@ -97,7 +97,12 @@ partial interface HTMLVideoElement {
 
 // https://w3c.github.io/picture-in-picture/#htmlvideoelement-extensions
 partial interface HTMLVideoElement {
-  [CEReactions, SetterThrows] attribute boolean disablePictureInPicture;
+  [Pref="media.pictureinpicture-api.enabled", NewObject] Promise<PictureInPictureWindow> requestPictureInPicture();
+
+  [Pref="media.pictureinpicture-api.enabled"] attribute EventHandler onenterpictureinpicture;
+  [Pref="media.pictureinpicture-api.enabled"] attribute EventHandler onleavepictureinpicture;
+
+  [Pref="media.pictureinpicture-api.enabled", CEReactions, SetterThrows] attribute boolean disablePictureInPicture;
 };
 
 // https://wicg.github.io/video-rvfc

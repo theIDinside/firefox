@@ -169,6 +169,8 @@
 #include "mozilla/dom/ElementBinding.h"
 #include "mozilla/dom/ErrorEvent.h"
 #include "mozilla/dom/Event.h"
+#include "mozilla/dom/CustomEvent.h"
+#include "mozilla/dom/PictureInPictureEvent.h"
 #include "mozilla/dom/EventListenerBinding.h"
 #include "mozilla/dom/FailedCertSecurityInfoBinding.h"
 #include "mozilla/dom/FeaturePolicy.h"
@@ -2644,6 +2646,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INTERNAL(Document)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mStyleSheetSetList)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mScriptLoader)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mCustomContentContainer)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPictureInPictureElement)
 
   DocumentOrShadowRoot::Traverse(tmp, cb);
 
@@ -2822,6 +2825,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(Document)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mViewTransitionUpdateCallbacks)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mReferrerInfo)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mPreloadReferrerInfo)
+  NS_IMPL_CYCLE_COLLECTION_UNLINK(mPictureInPictureElement)
 
   if (tmp->mDocGroup && tmp->mDocGroup->GetBrowsingContextGroup()) {
     tmp->mDocGroup->GetBrowsingContextGroup()->RemoveDocument(tmp,
@@ -15399,6 +15403,57 @@ already_AddRefed<Promise> Document::ExitFullscreen(ErrorResult& aRv) {
   UniquePtr<FullscreenExit> exit = FullscreenExit::Create(this, aRv);
   RefPtr<Promise> promise = exit->GetPromise();
   RestorePreviousFullscreenState(std::move(exit));
+  return promise.forget();
+}
+
+already_AddRefed<Promise> Document::ExitPictureInPicture(ErrorResult& aRv) {
+  // Get the current window
+  nsPIDOMWindowInner* window = GetInnerWindow();
+  if (!window) {
+    aRv.ThrowInvalidStateError("No window for document");
+    return nullptr;
+  }
+
+  // Create a promise to return
+  RefPtr<Promise> promise = Promise::Create(window->AsGlobal(), aRv);
+  if (aRv.Failed()) {
+    return nullptr;
+  }
+
+  // Check if there's a current picture-in-picture element
+  Element* pipElement = GetPictureInPictureElementInternal();
+  if (!pipElement) {
+    aRv.ThrowInvalidStateError("No element is currently in picture-in-picture");
+    return nullptr;
+  }
+
+  // Dispatch MozTogglePictureInPicture on the current PiP element to exit
+  RefPtr<CustomEvent> event = new CustomEvent(pipElement, nullptr, nullptr);
+  AutoJSAPI jsapi;
+  if (jsapi.Init(window)) {
+    JSContext* cx = jsapi.cx();
+    
+    // Create details object with reason
+    JS::Rooted<JSObject*> details(cx, JS_NewPlainObject(cx));
+    if (details) {
+      JS::Rooted<JSString*> reasonStr(cx, JS_NewUCStringCopyZ(cx, u"Programmatic"));
+      if (reasonStr) {
+        JS::Rooted<JS::Value> reasonVal(cx, JS::StringValue(reasonStr));
+        JS_SetProperty(cx, details, "reason", reasonVal);
+      }
+    }
+    
+    JS::Rooted<JS::Value> detailsVal(cx, details ? JS::ObjectValue(*details) : JS::UndefinedValue());
+    event->InitCustomEvent(cx, u"MozTogglePictureInPicture"_ns, false, false, detailsVal);
+    event->SetTrusted(true);
+    pipElement->DispatchEvent(*event);
+  }
+
+  // Clear the current picture-in-picture element
+  SetPictureInPictureElement(nullptr);
+
+  // Resolve the promise with undefined
+  promise->MaybeResolveWithUndefined();
   return promise.forget();
 }
 

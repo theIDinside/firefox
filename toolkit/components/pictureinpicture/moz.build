@@ -11,9 +11,20 @@ SPHINX_TREES["pictureinpicture"] = "docs"
 
 JAR_MANIFESTS += ["jar.mn"]
 
+XPIDL_SOURCES += [
+    "nsIPictureInPictureFunctions.idl",
+]
+
+XPIDL_MODULE = "pictureinpicture"
+
 EXTRA_JS_MODULES += [
     "PictureInPicture.sys.mjs",
     "PictureInPictureControls.sys.mjs",
+    "PictureInPictureFunctions.sys.mjs",
+]
+
+XPCOM_MANIFESTS += [
+    "components.conf",
 ]
 
 BROWSER_CHROME_MANIFESTS += [

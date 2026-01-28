@@ -8,6 +8,7 @@
 
 #include "mozilla/AppShutdown.h"
 #include "mozilla/AsyncEventDispatcher.h"
+#include "mozilla/dom/HTMLMediaElementBinding.h"
 #include "mozilla/dom/HTMLVideoElementBinding.h"
 #ifdef MOZ_WEBRTC
 #  include "mozilla/dom/RTCStatsReport.h"
@@ -22,13 +23,24 @@
 #include "MediaError.h"
 #include "VideoFrameContainer.h"
 #include "VideoOutput.h"
+#include "js/Value.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/StaticPrefs_media.h"
+#include "mozilla/dom/CustomEvent.h"
+#include "mozilla/dom/CustomEventBinding.h"
 #include "mozilla/dom/Performance.h"
+#include "mozilla/dom/PictureInPictureEvent.h"
+#include "mozilla/dom/PictureInPictureEventBinding.h"
+#include "mozilla/dom/PictureInPictureService.h"
+#include "mozilla/dom/PictureInPictureWindow.h"
+#include "mozilla/dom/Promise.h"
+#include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/TimeRanges.h"
+#include "mozilla/dom/UserActivation.h"
 #include "mozilla/dom/VideoPlaybackQuality.h"
 #include "mozilla/dom/VideoStreamTrack.h"
 #include "mozilla/dom/WakeLock.h"
+#include "mozilla/dom/WindowContext.h"
 #include "mozilla/dom/power/PowerManagerService.h"
 #include "mozilla/gfx/DataSurfaceHelpers.h"
 #include "nsError.h"
@@ -143,6 +155,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(HTMLVideoElement)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mVisualCloneTarget)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mVisualCloneTargetPromise)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mVisualCloneSource)
+  NS_IMPL_CYCLE_COLLECTION_UNLINK(mPictureInPictureWindow)
   tmp->mSecondaryVideoOutput = nullptr;
 NS_IMPL_CYCLE_COLLECTION_UNLINK_END_INHERITED(HTMLMediaElement)
 
@@ -152,6 +165,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(HTMLVideoElement,
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mVisualCloneTarget)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mVisualCloneTargetPromise)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mVisualCloneSource)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPictureInPictureWindow)
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
 
 HTMLVideoElement::HTMLVideoElement(already_AddRefed<NodeInfo>&& aNodeInfo)
@@ -711,6 +725,32 @@ void HTMLVideoElement::EndCloningVisually() {
   (void)mVisualCloneTarget->SetVisualCloneSource(nullptr);
   (void)SetVisualCloneTarget(nullptr);
 
+  // Clear the document's picture-in-picture element if this is it and fire
+  // event
+  Document* doc = OwnerDoc();
+  if (doc->GetPictureInPictureElementInternal() == this) {
+    doc->SetPictureInPictureElement(nullptr);
+
+    // Fire leavepictureinpicture event with stored window reference
+    if (mPictureInPictureWindow) {
+      PictureInPictureEventInit eventInit;
+      eventInit.mBubbles = false;
+      eventInit.mCancelable = false;
+      eventInit.mPictureInPictureWindow = mPictureInPictureWindow;
+
+      RefPtr<PictureInPictureEvent> pipEvent =
+          PictureInPictureEvent::Constructor(this, u"leavepictureinpicture"_ns,
+                                             eventInit);
+      pipEvent->SetTrusted(true);
+      RefPtr<AsyncEventDispatcher> asyncDispatcher =
+          new AsyncEventDispatcher(this, pipEvent.forget());
+      asyncDispatcher->PostDOMEvent();
+
+      // Clear the stored window reference
+      mPictureInPictureWindow = nullptr;
+    }
+  }
+
   UpdateMediaControlAfterPictureInPictureModeChanged();
 
   if (IsInComposedDoc() && !StaticPrefs::media_cloneElementVisually_testing()) {
@@ -975,6 +1015,84 @@ void HTMLVideoElement::CancelVideoFrameCallback(uint32_t aHandle) {
   if (mVideoFrameRequestManager.Cancel(aHandle) && !HasPendingCallbacks()) {
     NotifyDecoderActivityChanges();
   }
+}
+
+already_AddRefed<Promise> HTMLVideoElement::RequestPictureInPicture(
+    ErrorResult& aRv) {
+  return PictureInPictureService::CreateAndMaybeQueueParallelSteps(this, aRv);
+}
+
+// Picture-in-Picture event handlers
+EventHandlerNonNull* HTMLVideoElement::GetOnenterpictureinpicture() {
+  return EventTarget::GetEventHandler(nsGkAtoms::onenterpictureinpicture);
+}
+
+void HTMLVideoElement::SetOnenterpictureinpicture(
+    EventHandlerNonNull* aCallback) {
+  EventTarget::SetEventHandler(nsGkAtoms::onenterpictureinpicture, aCallback);
+}
+
+EventHandlerNonNull* HTMLVideoElement::GetOnleavepictureinpicture() {
+  return EventTarget::GetEventHandler(nsGkAtoms::onleavepictureinpicture);
+}
+
+void HTMLVideoElement::SetOnleavepictureinpicture(
+    EventHandlerNonNull* aCallback) {
+  EventTarget::SetEventHandler(nsGkAtoms::onleavepictureinpicture, aCallback);
+}
+
+void HTMLVideoElement::SetAssociatedPictureInPictureWindow(
+    PictureInPictureWindow* aWindow) {
+  mPictureInPictureWindow = aWindow;
+}
+
+PictureInPictureWindow* HTMLVideoElement::GetAssociatedPictureInPictureWindow()
+    const {
+  return mPictureInPictureWindow;
+}
+
+bool HTMLVideoElement::DispatchPictureInPictureEvent(
+    PictureInPictureWindow* aPipWindow, uint64_t aRequestId) {
+  AutoJSAPI jsapi;
+  if (!jsapi.Init(aPipWindow->GetOwnerWindow())) {
+    return false;
+  }
+  JSContext* cx = jsapi.cx();
+
+  JS::Rooted<JSObject*> details(cx, JS_NewPlainObject(cx));
+  if (!details) {
+    return false;
+  }
+
+  // Set reason
+  JS::Rooted<JSString*> reasonStr(cx, JS_NewUCStringCopyZ(cx, u"Request"));
+  if (!reasonStr) {
+    return false;
+  }
+  JS::Rooted<JS::Value> reasonVal(cx, JS::StringValue(reasonStr));
+  JS_SetProperty(cx, details, "reason", reasonVal);
+
+  // Set windowInstance
+  JS::Rooted<JS::Value> pipWindowVal(cx);
+  if (!ToJSValue(cx, aPipWindow, &pipWindowVal)) {
+    return false;
+  }
+  JS_SetProperty(cx, details, "windowInstance", pipWindowVal);
+
+  // Set requestId
+  JS::Rooted<JS::Value> requestIdVal(cx);
+  requestIdVal.setNumber(aRequestId);
+  JS_SetProperty(cx, details, "requestId", requestIdVal);
+
+  JS::Rooted<JS::Value> detailsVal(cx, JS::ObjectValue(*details));
+
+  RefPtr<CustomEvent> event = new CustomEvent(this, nullptr, nullptr);
+  event->InitCustomEvent(cx, u"MozTogglePictureInPicture"_ns, false, false,
+                         detailsVal);
+  event->SetTrusted(true);
+
+  DispatchEvent(*event);
+  return true;
 }
 
 }  // namespace mozilla::dom

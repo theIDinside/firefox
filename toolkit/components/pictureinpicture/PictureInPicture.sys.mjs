@@ -74,11 +74,11 @@ XPCOMUtils.defineLazyPreferenceGetter(
 let gNextWindowID = 0;
 
 export class PictureInPictureLauncherParent extends JSWindowActorParent {
-  receiveMessage(aMessage) {
+  async receiveMessage(aMessage) {
     switch (aMessage.name) {
       case "PictureInPicture:Request": {
         let videoData = aMessage.data;
-        PictureInPicture.handlePictureInPictureRequest(this.manager, videoData);
+        await PictureInPicture.handlePictureInPictureRequest(this.manager, videoData);
         break;
       }
     }
@@ -896,7 +896,7 @@ export var PictureInPicture = {
     tab.addEventListener("TabSwapPictureInPicture", this);
 
     let pipId = gNextWindowID.toString();
-    win.setupPlayer(pipId, wgp, videoData.videoRef, videoData.autoFocus);
+    const setupPromise = win.setupPlayer(pipId, wgp, videoData.videoRef, videoData.pipRef, videoData.autoFocus);
     gNextWindowID++;
 
     this.weakWinToBrowser.set(win, browser);
@@ -918,6 +918,7 @@ export var PictureInPicture = {
       ccEnabled: videoData.ccEnabled,
       webVTTSubtitles: videoData.webVTTSubtitles,
     });
+    await setupPromise;
   },
 
   /**

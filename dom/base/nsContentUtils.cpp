@@ -113,6 +113,7 @@
 #include "mozilla/StaticAnalysisFunctions.h"
 #include "mozilla/StaticPrefs_browser.h"
 #include "mozilla/StaticPrefs_dom.h"
+#include "mozilla/dom/PictureInPictureService.h"
 #include "mozilla/extensions/WebExtensionPolicy.h"
 #include "nsIOService.h"
 #include "nsMenuPopupFrame.h"
@@ -1139,6 +1140,8 @@ nsresult nsContentUtils::Init() {
   for (const auto& pref : kRfpPrefs) {
     Preferences::RegisterCallback(RecomputeResistFingerprintingAllDocs, pref);
   }
+
+  PictureInPictureService::Init();
 
   sInitialized = true;
 

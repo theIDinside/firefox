@@ -76,9 +76,11 @@ const BOTTOM_RIGHT_QUADRANT = 4;
  * @param {ContentDOMReference} videoRef
  *    A reference to the video element that a Picture-in-Picture window
  *    is being created for
+ * @param {ContentDOMReference} pipRef
+ *    The potential PictureInPictureWindow (PiP API). Can be none.
  */
-function setupPlayer(id, wgp, videoRef, autoFocus) {
-  Player.init(id, wgp, videoRef, autoFocus);
+function setupPlayer(id, wgp, videoRef, pipRef, autoFocus) {
+  Player.init(id, wgp, videoRef, pipRef, autoFocus);
 }
 
 /**
@@ -219,10 +221,12 @@ let Player = {
    * @param {ContentDOMReference} videoRef
    *   A reference to the video element that a Picture-in-Picture window
    *   is being created for
+   * @param {ContentDOMReference} pipRef
+   *   The potential PictureInPictureWindow (PiP API). Can be none.
    * @param {boolean} autoFocus
    *   Autofocus the PiP window
    */
-  init(id, wgp, videoRef, autoFocus) {
+  init(id, wgp, videoRef, pipRef, autoFocus) {
     this.id = id;
 
     // State for whether or not we are adjusting the time via the scrubber
@@ -255,6 +259,7 @@ let Player = {
       browser.browsingContext.currentWindowGlobal.getActor("PictureInPicture");
     this.actor.sendAsyncMessage("PictureInPicture:SetupPlayer", {
       videoRef,
+      pipRef
     });
 
     PictureInPicture.weakPipToWin.set(this.actor, window);

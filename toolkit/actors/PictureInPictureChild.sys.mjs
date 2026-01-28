@@ -141,6 +141,7 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
           this.togglePictureInPicture({
             video: event.target,
             reason: event.detail?.reason,
+            pictureInPictureWindow: event.detail?.windowInstance,
             eventExtraKeys: event.detail?.eventExtraKeys,
           });
         }
@@ -171,6 +172,7 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
    * @param {object} pipObject
    * @param {HTMLVideoElement} pipObject.video
    * @param {string} pipObject.reason What toggled PiP, e.g. "shortcut"
+   * @param {PictureInPictureWindow} pipObject.pictureInPictureWindow The PictureInPictureWindow instance, exposed via webidl
    * @param {object} pipObject.eventExtraKeys Extra telemetry keys to record
    * @param {boolean} autoFocus Autofocus the PiP window (default: true)
    *
@@ -178,7 +180,7 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
    *   Resolved once the new Picture-in-Picture window has been requested.
    */
   async togglePictureInPicture(pipObject, autoFocus = true) {
-    let { video, reason, eventExtraKeys = {} } = pipObject;
+    let { video, reason, pictureInPictureWindow, eventExtraKeys = {} } = pipObject;
     if (video.isCloningElementVisually) {
       // The only way we could have entered here for the same video is if
       // we are toggling via the context menu or via the urlbar button,
@@ -226,12 +228,13 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
     // All other requests to toggle PiP should open a new PiP
     // window
     const videoRef = lazy.ContentDOMReference.get(video);
-    this.sendAsyncMessage("PictureInPicture:Request", {
+    const res = this.sendQuery("PictureInPicture:Request", {
       isMuted: PictureInPictureChild.videoIsMuted(video),
       playing: PictureInPictureChild.videoIsPlaying(video),
       videoHeight: video.videoHeight,
       videoWidth: video.videoWidth,
       videoRef,
+      pipRef: lazy.ContentDOMReference.get(pictureInPictureWindow),
       ccEnabled: lazy.DISPLAY_TEXT_TRACKS_PREF,
       webVTTSubtitles: !!video.textTracks?.length,
       scrubberPosition,
@@ -240,10 +243,15 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
       autoFocus,
     });
 
-    Glean.pictureinpicture["openedMethod" + reason].record({
-      firstTimeToggle: !Services.prefs.getBoolPref(TOGGLE_HAS_USED_PREF),
-      ...eventExtraKeys,
-    });
+    try {
+      Glean.pictureinpicture["openedMethod" + reason].record({
+        firstTimeToggle: !Services.prefs.getBoolPref(TOGGLE_HAS_USED_PREF),
+        ...eventExtraKeys,
+      });
+    } catch(ex) {
+      lazy.logConsole.debug("Glean threw an exception");
+    }
+    await res
   }
 
   /**
@@ -1606,6 +1614,9 @@ export class PictureInPictureChild extends JSWindowActorChild {
   // A reference to current WebVTT track currently displayed on the content window
   _currentWebVTTTrack = null;
 
+  // A weak reference to the PictureInPictureWindow (the one exposed to web content)
+  #weakPictureInPictureWindow;
+
   observerFunction = null;
 
   observe(subject, topic, data) {
@@ -1853,6 +1864,15 @@ export class PictureInPictureChild extends JSWindowActorChild {
     } else if (allCuesArray.length >= 2) {
       allCuesArray.reverse();
     }
+  }
+
+  getPictureInPictureWindow() {
+    if (this.#weakPictureInPictureWindow) {
+      try {
+        return this.#weakPictureInPictureWindow.get();
+      } catch (e) {}
+    }
+    return null;
   }
 
   /**
@@ -2153,8 +2173,8 @@ export class PictureInPictureChild extends JSWindowActorChild {
   receiveMessage(message) {
     switch (message.name) {
       case "PictureInPicture:SetupPlayer": {
-        const { videoRef } = message.data;
-        this.setupPlayer(videoRef);
+        const { videoRef, pipRef } = message.data;
+        this.setupPlayer(videoRef, pipRef);
         break;
       }
       case "PictureInPicture:Play": {
@@ -2421,11 +2441,14 @@ export class PictureInPictureChild extends JSWindowActorChild {
    * @param videoRef {ContentDOMReference}
    *    A reference to the video element that a Picture-in-Picture window
    *    is being created for
+   * @param pipRef {ContentDOMReference}
+   *    A reference to the PictureInPictureWindow instance in platform code,
+   *    that is exposed to web content.
    * @returns {Promise<void>}
    *   Resolves once the player window has been set up properly, or a pre-existing
    *   Picture-in-Picture window has gone away due to an unexpected error.
    */
-  async setupPlayer(videoRef) {
+  async setupPlayer(videoRef, pipRef) {
     const video = await lazy.ContentDOMReference.resolve(videoRef);
 
     this.weakVideo = Cu.getWeakReference(video);
@@ -2439,6 +2462,9 @@ export class PictureInPictureChild extends JSWindowActorChild {
     }
 
     this.videoWrapper = applyWrapper(this, originatingVideo);
+
+    const pipInstance = await lazy.ContentDOMReference.resolve(pipRef);
+    this.setPictureInPictureWindowInstance(pipInstance);
 
     let loadPromise = new Promise(resolve => {
       this.contentWindow.addEventListener("load", resolve, {
@@ -2509,6 +2535,23 @@ export class PictureInPictureChild extends JSWindowActorChild {
       },
       { once: true }
     );
+  }
+
+  #onResizeNotifyPictureInPictureWindowInstance() {
+    const pipWindow = this.getPictureInPictureWindow();
+    if (pipWindow) {
+      pipWindow.setDimensions(this.contentWindow.innerWidth, this.contentWindow.innerHeight);
+    }
+  }
+
+  setPictureInPictureWindowInstance(pipWindowInstance) {
+    this.#weakPictureInPictureWindow = pipWindowInstance
+      ? Cu.getWeakReference(pipWindowInstance)
+      : null;
+    
+    if(pipWindowInstance) {
+      this.contentWindow.addEventListener("resize", () => this.#onResizeNotifyPictureInPictureWindowInstance());
+    }
   }
 
   /**

@@ -21,6 +21,7 @@
 
 #include "AnchorPositioningUtils.h"
 #include "Attr.h"
+#include "CustomEvent.h"
 #include "ErrorList.h"
 #include "ExpandedPrincipal.h"
 #include "MainThreadUtils.h"
@@ -190,6 +191,7 @@
 #include "mozilla/dom/HTMLObjectElement.h"
 #include "mozilla/dom/HTMLSharedElement.h"
 #include "mozilla/dom/HTMLTextAreaElement.h"
+#include "mozilla/dom/HTMLVideoElement.h"
 #include "mozilla/dom/HighlightRegistry.h"
 #include "mozilla/dom/InspectorUtils.h"
 #include "mozilla/dom/IntegrityPolicy.h"
@@ -212,6 +214,8 @@
 #include "mozilla/dom/PageTransitionEventBinding.h"
 #include "mozilla/dom/Performance.h"
 #include "mozilla/dom/PermissionMessageUtils.h"
+#include "mozilla/dom/PictureInPictureEvent.h"
+#include "mozilla/dom/PictureInPictureService.h"
 #include "mozilla/dom/PolicyContainer.h"
 #include "mozilla/dom/PopoverData.h"
 #include "mozilla/dom/PostMessageEvent.h"
@@ -2640,6 +2644,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INTERNAL(Document)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mStyleSheetSetList)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mScriptLoader)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mCustomContentContainer)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPictureInPictureElement)
 
   DocumentOrShadowRoot::Traverse(tmp, cb);
 
@@ -2813,6 +2818,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(Document)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mViewTransitionUpdateCallbacks)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mReferrerInfo)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mPreloadReferrerInfo)
+  NS_IMPL_CYCLE_COLLECTION_UNLINK(mPictureInPictureElement)
 
   if (tmp->mDocGroup && tmp->mDocGroup->GetBrowsingContextGroup()) {
     tmp->mDocGroup->GetBrowsingContextGroup()->RemoveDocument(tmp,
@@ -15410,6 +15416,34 @@ already_AddRefed<Promise> Document::ExitFullscreen(ErrorResult& aRv) {
   RefPtr<Promise> promise = exit->GetPromise();
   RestorePreviousFullscreenState(std::move(exit));
   return promise.forget();
+}
+
+// https://w3c.github.io/picture-in-picture/#exit-pip
+// Note that exitPictureInPicture is not being reworked as extensively as
+// requestPictureInPicture() is. Current state of spec is that entire algorithm
+// is in parallel when that's not really true.
+already_AddRefed<Promise> Document::ExitPictureInPicture(ErrorResult& aRv) {
+  Element* pipElement = GetPictureInPictureElementInternal();
+
+  // 1. If pictureInPictureElement is null, throw a InvalidStateError and abort
+  // these steps.
+  if (!pipElement) {
+    aRv.ThrowInvalidStateError("No element is currently in picture-in-picture");
+    return nullptr;
+  }
+
+  RefPtr<Promise> p =
+      PictureInPictureService::CreatePromise(GetInnerWindow(), aRv);
+
+  if (!p) {
+    return nullptr;
+  }
+
+  PictureInPictureService::RunInParallel(
+      MakeRefPtr<ExitPictureInPictureRequest>(
+          p, static_cast<HTMLVideoElement*>(pipElement)));
+
+  return p.forget();
 }
 
 static void AskWindowToExitFullscreen(Document* aDoc) {

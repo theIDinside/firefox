@@ -11729,6 +11729,12 @@
   value: false
   mirror: always
 
+# Enable the Picture-in-Picture API
+- name: media.pictureinpicture-api.enabled
+  type: bool
+  value: true
+  mirror: always
+
 # Does the GMPlugin process initialize minimal XPCOM
 - name: media.gmp.use-minimal-xpcom
   type: RelaxedAtomicBool

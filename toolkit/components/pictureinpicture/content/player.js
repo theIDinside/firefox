@@ -76,9 +76,12 @@ const BOTTOM_RIGHT_QUADRANT = 4;
  * @param {ContentDOMReference} videoRef
  *    A reference to the video element that a Picture-in-Picture window
  *    is being created for
+ * @param {ContentDOMReference} pipRef
+ *    The potential PictureInPictureWindow (PiP API). Can be none.
+ * @returns { Promise<void> }
  */
-function setupPlayer(id, wgp, videoRef, autoFocus) {
-  Player.init(id, wgp, videoRef, autoFocus);
+function setupPlayer(id, wgp, videoRef, pipRef, autoFocus) {
+  return Player.init(id, wgp, videoRef, pipRef, autoFocus);
 }
 
 /**
@@ -219,10 +222,14 @@ let Player = {
    * @param {ContentDOMReference} videoRef
    *   A reference to the video element that a Picture-in-Picture window
    *   is being created for
+   * @param {ContentDOMReference} pipRef
+   *   The potential PictureInPictureWindow (PiP API). Can be none.
    * @param {boolean} autoFocus
    *   Autofocus the PiP window
+   * @returns { Promise<void> }
+   *   Returns the promise from the request of setting up the player in the child.
    */
-  init(id, wgp, videoRef, autoFocus) {
+  init(id, wgp, videoRef, pipRef, autoFocus) {
     this.id = id;
 
     // State for whether or not we are adjusting the time via the scrubber
@@ -251,10 +258,19 @@ let Player = {
     );
     holder.appendChild(browser);
 
+    // dimensions set on the contentWindow so that web content knows the size when it gets opened
+    // otherwise it'll be reported as 0,0 until first resize.
+    const initDimension = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+
     this.actor =
       browser.browsingContext.currentWindowGlobal.getActor("PictureInPicture");
-    this.actor.sendAsyncMessage("PictureInPicture:SetupPlayer", {
+    const setupPromise = this.actor.sendQuery("PictureInPicture:SetupPlayer", {
       videoRef,
+      pipRef,
+      initDimension,
     });
 
     PictureInPicture.weakPipToWin.set(this.actor, window);
@@ -380,6 +396,7 @@ let Player = {
     }
 
     this._isInitialized = true;
+    return setupPromise;
   },
 
   uninit() {

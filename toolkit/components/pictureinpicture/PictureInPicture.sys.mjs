@@ -74,14 +74,17 @@ XPCOMUtils.defineLazyPreferenceGetter(
 let gNextWindowID = 0;
 
 export class PictureInPictureLauncherParent extends JSWindowActorParent {
-  receiveMessage(aMessage) {
+  async receiveMessage(aMessage) {
     switch (aMessage.name) {
       case "PictureInPicture:Request": {
         let videoData = aMessage.data;
-        PictureInPicture.handlePictureInPictureRequest(this.manager, videoData);
-        break;
+        return PictureInPicture.handlePictureInPictureRequest(
+          this.manager,
+          videoData
+        );
       }
     }
+    return undefined;
   }
 }
 
@@ -153,7 +156,7 @@ export class PictureInPictureToggleParent extends JSWindowActorParent {
  * a clone of a video element running in web content.
  */
 export class PictureInPictureParent extends JSWindowActorParent {
-  receiveMessage(aMessage) {
+  async receiveMessage(aMessage) {
     switch (aMessage.name) {
       case "PictureInPicture:Resize": {
         let videoData = aMessage.data;
@@ -165,8 +168,10 @@ export class PictureInPictureParent extends JSWindowActorParent {
          * Content has requested that its Picture in Picture window go away.
          */
         let reason = aMessage.data.reason;
-        PictureInPicture.closeSinglePipWindow({ reason, actorRef: this });
-        break;
+        return PictureInPicture.closeSinglePipWindow({
+          reason,
+          actorRef: this,
+        });
       }
       case "PictureInPicture:Playing": {
         let player = PictureInPicture.getWeakPipPlayer(this);
@@ -224,6 +229,7 @@ export class PictureInPictureParent extends JSWindowActorParent {
         break;
       }
     }
+    return undefined;
   }
 }
 
@@ -246,6 +252,9 @@ export var PictureInPicture = {
 
   // Maps a WindowGlobal to count of eligible PiP videos
   weakGlobalToEligiblePipCount: new WeakMap(),
+
+  // Tracks the 1 pip window we allow to exist from video.requestPictureInPicture()
+  apiPipWindow: null,
 
   // Tracks the number of open player windows for Telemetry tracking.
   currentPlayerCount: 0,
@@ -849,6 +858,27 @@ export var PictureInPicture = {
     await this.closePipWindow(win);
   },
 
+  // Add a window that was created from the Picture In Picture API
+  addAPIWindow(window) {
+    this.apiPipWindow = Cu.getWeakReference(window);
+  },
+
+  /**
+   * Closes all PiP windows that were opened via the Picture-in-Picture API.
+   * This ensures only one API-opened window exists at a time.
+   *
+   * @param {string} reason
+   *   The reason for closing these windows (for telemetry)
+   */
+  async closeAllApiPipWindows(reason = "Programmatic") {
+    const pipApiWindow = this.apiPipWindow?.get();
+    if (pipApiWindow) {
+      Glean.pictureinpicture["closedMethod" + reason].record();
+      await this.closePipWindow(pipApiWindow);
+      this.apiPipWindow = null;
+    }
+  },
+
   /**
    * A request has come up from content to open a Picture in Picture
    * window.
@@ -866,11 +896,25 @@ export var PictureInPicture = {
    *   videoWidth (int):
    *     The preferred width of the video.
    *
+   *   videoRef (ContentDOMReference)
+   *    A reference to the video element that a Picture-in-Picture window
+   *    is being created for
+   *
+   *   pipRef {ContentDOMReference}
+   *    A reference to the PictureInPictureWindow instance in platform code,
+   *    that is exposed to web content.
+   *
    * @returns {Promise}
    *   Resolves once the Picture in Picture window has been created, and
    *   the player component inside it has finished loading.
    */
   async handlePictureInPictureRequest(wgp, videoData) {
+    const isApiRequest = !!videoData.pipRef;
+
+    if (isApiRequest) {
+      await this.closeAllApiPipWindows();
+    }
+
     this.currentPlayerCount += 1;
     this.maxConcurrentPlayerCount = Math.max(
       this.maxConcurrentPlayerCount,
@@ -896,12 +940,22 @@ export var PictureInPicture = {
     tab.addEventListener("TabSwapPictureInPicture", this);
 
     let pipId = gNextWindowID.toString();
-    win.setupPlayer(pipId, wgp, videoData.videoRef, videoData.autoFocus);
+    const setupPromise = win.setupPlayer(
+      pipId,
+      wgp,
+      videoData.videoRef,
+      videoData.pipRef,
+      videoData.autoFocus
+    );
     gNextWindowID++;
 
     this.weakWinToBrowser.set(win, browser);
     this.addPiPBrowserToWeakMap(browser);
     this.addOriginatingWinToWeakMap(browser);
+
+    if (isApiRequest) {
+      this.addAPIWindow(win);
+    }
 
     win.setScrubberPosition(videoData.scrubberPosition);
     win.setTimestamp(videoData.timestamp);
@@ -918,6 +972,7 @@ export var PictureInPicture = {
       ccEnabled: videoData.ccEnabled,
       webVTTSubtitles: videoData.webVTTSubtitles,
     });
+    await setupPromise;
   },
 
   /**

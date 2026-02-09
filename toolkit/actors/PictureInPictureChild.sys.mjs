@@ -171,6 +171,7 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
    * @param {object} pipObject
    * @param {HTMLVideoElement} pipObject.video
    * @param {string} pipObject.reason What toggled PiP, e.g. "shortcut"
+   * @param {PictureInPictureWindow} pipObject.pictureInPictureWindow The PictureInPictureWindow instance, exposed via webidl
    * @param {object} pipObject.eventExtraKeys Extra telemetry keys to record
    * @param {boolean} autoFocus Autofocus the PiP window (default: true)
    *
@@ -178,7 +179,12 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
    *   Resolved once the new Picture-in-Picture window has been requested.
    */
   async togglePictureInPicture(pipObject, autoFocus = true) {
-    let { video, reason, eventExtraKeys = {} } = pipObject;
+    let {
+      video,
+      reason,
+      pictureInPictureWindow,
+      eventExtraKeys = {},
+    } = pipObject;
     if (video.isCloningElementVisually) {
       // The only way we could have entered here for the same video is if
       // we are toggling via the context menu or via the urlbar button,
@@ -226,12 +232,15 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
     // All other requests to toggle PiP should open a new PiP
     // window
     const videoRef = lazy.ContentDOMReference.get(video);
-    this.sendAsyncMessage("PictureInPicture:Request", {
+    const res = this.sendQuery("PictureInPicture:Request", {
       isMuted: PictureInPictureChild.videoIsMuted(video),
       playing: PictureInPictureChild.videoIsPlaying(video),
       videoHeight: video.videoHeight,
       videoWidth: video.videoWidth,
       videoRef,
+      pipRef: pictureInPictureWindow
+        ? lazy.ContentDOMReference.get(pictureInPictureWindow)
+        : null,
       ccEnabled: lazy.DISPLAY_TEXT_TRACKS_PREF,
       webVTTSubtitles: !!video.textTracks?.length,
       scrubberPosition,
@@ -244,6 +253,7 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
       firstTimeToggle: !Services.prefs.getBoolPref(TOGGLE_HAS_USED_PREF),
       ...eventExtraKeys,
     });
+    await res;
   }
 
   /**
@@ -273,7 +283,7 @@ export class PictureInPictureLauncherChild extends JSWindowActorChild {
     let video = doc.activeElement;
     if (!HTMLVideoElement.isInstance(video)) {
       let listOfVideos = [...doc.querySelectorAll("video")].filter(
-        video => !isNaN(video.duration)
+        v => !isNaN(v.duration)
       );
       // Get the first non-paused video, otherwise the longest video. This
       // fallback is designed to skip over "preview"-style videos on sidebars.
@@ -1596,6 +1606,7 @@ export class PictureInPictureToggleChild extends JSWindowActorChild {
 }
 
 export class PictureInPictureChild extends JSWindowActorChild {
+  static webContentElementToPiPContextWeakMap = new WeakMap();
   #subtitlesEnabled = false;
   // A weak reference to this PiP window's video element
   weakVideo = null;
@@ -1605,6 +1616,9 @@ export class PictureInPictureChild extends JSWindowActorChild {
 
   // A reference to current WebVTT track currently displayed on the content window
   _currentWebVTTTrack = null;
+
+  // A weak reference to the PictureInPictureWindow (the one exposed to web content)
+  #weakPictureInPictureWindow;
 
   observerFunction = null;
 
@@ -1855,6 +1869,15 @@ export class PictureInPictureChild extends JSWindowActorChild {
     }
   }
 
+  getPictureInPictureWindow() {
+    if (this.#weakPictureInPictureWindow) {
+      try {
+        return this.#weakPictureInPictureWindow.get();
+      } catch (e) {}
+    }
+    return null;
+  }
+
   /**
    * Returns a reference to the PiP's <video> element being displayed in Picture-in-Picture
    * mode.
@@ -2098,9 +2121,10 @@ export class PictureInPictureChild extends JSWindowActorChild {
   async closePictureInPicture({ reason }) {
     let video = this.getWeakVideo();
     if (video) {
+      PictureInPictureChild.webContentElementToPiPContextWeakMap.delete(video);
       this.untrackOriginatingVideo(video);
     }
-    this.sendAsyncMessage("PictureInPicture:Close", {
+    const query = this.sendQuery("PictureInPicture:Close", {
       reason,
     });
 
@@ -2118,7 +2142,9 @@ export class PictureInPictureChild extends JSWindowActorChild {
       // clear the weak reference directly so nothing else can get a hold
       // of it from this angle.
       this.weakPlayerContent = null;
+      // N.B: Do we need this promise, or are we safe to just rely on the unload event?
     }
+    await query;
   }
 
   /**
@@ -2150,12 +2176,11 @@ export class PictureInPictureChild extends JSWindowActorChild {
     );
   }
 
-  receiveMessage(message) {
+  async receiveMessage(message) {
     switch (message.name) {
       case "PictureInPicture:SetupPlayer": {
-        const { videoRef } = message.data;
-        this.setupPlayer(videoRef);
-        break;
+        const { videoRef, pipRef, initDimension } = message.data;
+        return await this.setupPlayer(videoRef, pipRef, initDimension);
       }
       case "PictureInPicture:Play": {
         this.play();
@@ -2240,6 +2265,7 @@ export class PictureInPictureChild extends JSWindowActorChild {
         break;
       }
     }
+    return undefined;
   }
 
   /**
@@ -2421,11 +2447,18 @@ export class PictureInPictureChild extends JSWindowActorChild {
    * @param videoRef {ContentDOMReference}
    *    A reference to the video element that a Picture-in-Picture window
    *    is being created for
+   * @param pipRef {ContentDOMReference}
+   *    A reference to the PictureInPictureWindow instance in platform code,
+   *    that is exposed to web content.
+   * @param initWindowDimension {{width: number, height:number}}
+   *    The initial window dimensions. Needed to set PIP Window (for PIP API) dimensions
+   *    so that web content has correct dimensions before first resize.
+   *
    * @returns {Promise<void>}
    *   Resolves once the player window has been set up properly, or a pre-existing
    *   Picture-in-Picture window has gone away due to an unexpected error.
    */
-  async setupPlayer(videoRef) {
+  async setupPlayer(videoRef, pipRef, initWindowDimension) {
     const video = await lazy.ContentDOMReference.resolve(videoRef);
 
     this.weakVideo = Cu.getWeakReference(video);
@@ -2437,8 +2470,16 @@ export class PictureInPictureChild extends JSWindowActorChild {
       await this.closePictureInPicture({ reason: "SetupFailure" });
       return;
     }
+    PictureInPictureChild.webContentElementToPiPContextWeakMap.set(video, this);
 
     this.videoWrapper = applyWrapper(this, originatingVideo);
+
+    if (pipRef) {
+      const { width, height } = initWindowDimension;
+      const pipInstance = await lazy.ContentDOMReference.resolve(pipRef);
+      this.setPictureInPictureWindowInstance(pipInstance);
+      pipInstance.notifyDimensionsChanged(width, height);
+    }
 
     let loadPromise = new Promise(resolve => {
       this.contentWindow.addEventListener("load", resolve, {
@@ -2495,20 +2536,46 @@ export class PictureInPictureChild extends JSWindowActorChild {
     // itself (e.g., the keyboard shortcut or the page action button). So we
     // manually record that the document has been activated via user gesture
     // to make sure the video can be played regardless of autoplay permissions.
-    originatingVideo.ownerDocument.notifyUserGestureActivation();
+    // N.B: If the PIP window was created using the PIP API, it consumed a user
+    // activation it's unclear that we should be granting it another one.
+    if (!pipRef) {
+      originatingVideo.ownerDocument.notifyUserGestureActivation();
+    }
 
     this.contentWindow.addEventListener(
       "unload",
       () => {
-        let video = this.getWeakVideo();
-        if (video) {
-          this.untrackOriginatingVideo(video);
-          video.stopCloningElementVisually();
+        let v = this.getWeakVideo();
+        if (v) {
+          this.untrackOriginatingVideo(v);
+          v.stopCloningElementVisually();
         }
         this.weakVideo = null;
       },
       { once: true }
     );
+  }
+
+  #onResizeNotifyPictureInPictureWindowInstance() {
+    const pipWindow = this.getPictureInPictureWindow();
+    if (pipWindow) {
+      pipWindow.notifyDimensionsChanged(
+        this.contentWindow.innerWidth,
+        this.contentWindow.innerHeight
+      );
+    }
+  }
+
+  setPictureInPictureWindowInstance(pipWindowInstance) {
+    this.#weakPictureInPictureWindow = pipWindowInstance
+      ? Cu.getWeakReference(pipWindowInstance)
+      : null;
+
+    if (pipWindowInstance) {
+      this.contentWindow.addEventListener("resize", () =>
+        this.#onResizeNotifyPictureInPictureWindowInstance()
+      );
+    }
   }
 
   /**

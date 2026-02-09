@@ -335,6 +335,25 @@ Element* DocumentOrShadowRoot::GetFullscreenElement() const {
   return Element::FromNodeOrNull(Retarget(element));
 }
 
+Element* DocumentOrShadowRoot::GetPictureInPictureElement() const {
+  if (!AsNode().IsInComposedDoc()) {
+    return nullptr;
+  }
+
+  Element* candidate = Element::FromNodeOrNull(nsContentUtils::Retarget(
+      AsNode().OwnerDoc()->GetPictureInPictureElementInternal(), mAsNode));
+
+  // TODO: May change in the future, see bug 2019913
+  if (!candidate || !candidate->IsInComposedDoc()) {
+    return candidate;
+  }
+
+  if (candidate->SubtreeRoot() != &AsNode()) {
+    return nullptr;
+  }
+  return candidate;
+}
+
 namespace {
 
 using FrameForPointOption = nsLayoutUtils::FrameForPointOption;

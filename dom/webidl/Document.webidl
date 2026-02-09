@@ -305,6 +305,12 @@ partial interface Document {
   attribute EventHandler onfullscreenerror;
 };
 
+// https://w3c.github.io/picture-in-picture/#extensions-to-the-document-interface
+partial interface Document {
+  [Pref="media.pictureinpicture-api.enabled"] readonly attribute boolean pictureInPictureEnabled;
+  [Pref="media.pictureinpicture-api.enabled", NewObject] Promise<undefined> exitPictureInPicture();
+};
+
 // https://w3c.github.io/pointerlock/#extensions-to-the-document-interface
 // https://w3c.github.io/pointerlock/#extensions-to-the-documentorshadowroot-mixin
 partial interface Document {

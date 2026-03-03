@@ -137,7 +137,15 @@ import org.mozilla.fenix.summarization.onboarding.FenixSummarizeFeatureDiscovery
 import org.mozilla.fenix.summarization.onboarding.SummarizeFeatureDiscoverySettings
 import org.mozilla.fenix.telemetry.TelemetryMiddleware
 import org.mozilla.fenix.utils.getUndoDelay
+import org.mozilla.fenix.pictureinpicture.PictureInPictureActivity
+import org.mozilla.fenix.pictureinpicture.PipSessionHolder
+import org.mozilla.gecko.EventDispatcher
+import org.mozilla.gecko.util.BundleEventListener
 import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoSessionSettings
+import android.content.Intent
+import android.util.Log
 import java.util.concurrent.TimeUnit
 import mozilla.components.service.pocket.mars.api.Placement as MarsSpocsPlacement
 
@@ -280,7 +288,28 @@ class Core(
             lazyAutofillStorage,
             lazyPasswordsStorage,
             trackingProtectionPolicyFactory.createTrackingProtectionPolicy(),
-        )
+        ).also { runtime ->
+            // TODO: One would write a pip bundlelistener here
+            EventDispatcher.getInstance().registerUiThreadListener(
+                BundleEventListener { event, message, _ ->
+                    Log.d("PictureInPicture", "event received $event")
+                    val bcId = message?.getLong("browsingContextId", -1L) ?: -1L
+                    val bcgId = message?.getLong("browsingContextGroupId", -1L) ?: -1L
+                    val pipSettings = GeckoSessionSettings.Builder()
+                        .browsingContextGroupId(bcgId)
+                        .build()
+                    val pipSession = GeckoSession(pipSettings)
+                    pipSession.open(runtime)
+                    PipSessionHolder.sourceBrowsingContextId = bcId
+                    PipSessionHolder.session = pipSession
+                    context.startActivity(
+                        Intent(context, PictureInPictureActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
+                "GeckoView:LaunchPictureInPicture",
+            )
+        }
     }
 
     private val Context.dataStore by preferencesDataStore(

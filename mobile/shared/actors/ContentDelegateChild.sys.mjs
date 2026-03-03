@@ -7,6 +7,7 @@ import { GeckoViewActorChild } from "resource://gre/modules/GeckoViewActorChild.
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
+  ContentDOMReference: "resource://gre/modules/ContentDOMReference.sys.mjs",
   ManifestObtainer: "resource://gre/modules/ManifestObtainer.sys.mjs",
   SelectionUtils: "resource://gre/modules/SelectionUtils.sys.mjs",
   SpellCheckHelper: "resource://gre/modules/InlineSpellChecker.sys.mjs",
@@ -15,6 +16,29 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const MAX_TEXT_LENGTH = 4096;
 
 export class ContentDelegateChild extends GeckoViewActorChild {
+  receiveMessage(aMsg) {
+    debug`receiveMessage: ${aMsg.name}`;
+    switch (aMsg.name) {
+      case "GeckoView:PiPClone": {
+        const { videoRef } = aMsg.data;
+        const pipVideo =
+          this.contentWindow.document.getElementById("playervideo");
+        if (!pipVideo) {
+          warn`PiPClone: no #playervideo found`;
+          return;
+        }
+        const sourceVideo = lazy.ContentDOMReference.resolve(videoRef);
+        if (!sourceVideo) {
+          warn`PiPClone: could not resolve source videoRef`;
+          return;
+        }
+        debug`PiPClone: calling cloneElementVisually`;
+        sourceVideo.cloneElementVisually(pipVideo);
+        break;
+      }
+    }
+  }
+
   notifyParentOfViewportFit() {
     if (this.triggerViewportFitChange) {
       this.contentWindow.cancelIdleCallback(this.triggerViewportFitChange);
@@ -227,6 +251,7 @@ export class ContentDelegateChild extends GeckoViewActorChild {
         }
         break;
       case "DOMContentLoaded": {
+        debug`DOMContentLoaded event for ContentDelegateChild`;
         if (aEvent.originalTarget.ownerGlobal == this.contentWindow) {
           // If loaded content doesn't have viewport-fit, parent still
           // uses old value of previous content.
@@ -235,6 +260,14 @@ export class ContentDelegateChild extends GeckoViewActorChild {
         if (this.contentWindow !== this.contentWindow?.top) {
           // Only check WebApp manifest on the top level window.
           return;
+        }
+        const pipVideo =
+          this.contentWindow.document.getElementById("playervideo");
+        if (pipVideo) {
+          debug`DOMContentLoaded: found #playervideo, signalling PiP player ready`;
+          this.sendAsyncMessage("GeckoView:PiPPlayerReady", {
+            pipVideoRef: lazy.ContentDOMReference.get(pipVideo),
+          });
         }
         this.contentWindow.requestIdleCallback(async () => {
           const manifest = await lazy.ManifestObtainer.contentObtainManifest(

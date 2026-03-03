@@ -193,6 +193,11 @@ public final class GeckoSessionSettings implements Parcelable {
       mSettings.setViewportMode(mode);
       return this;
     }
+
+    public @NonNull Builder browsingContextGroupId(final long id) {
+      mSettings.setBrowsingContextGroupId(id);
+      return this;
+    }
   }
 
   private static final String LOGTAG = "GeckoSessionSettings";
@@ -356,6 +361,8 @@ public final class GeckoSessionSettings implements Parcelable {
   private static final Key<String> UNSAFE_CONTEXT_ID =
       new Key<String>("unsafeSessionContextId", /* initOnly */ true, /* values */ null);
 
+  private static final String BROWSING_CONTEXT_GROUP_ID = "browsingContextGroupId";
+
   private final GeckoSession mSession;
   private final GeckoBundle mBundle;
 
@@ -397,6 +404,7 @@ public final class GeckoSessionSettings implements Parcelable {
     mBundle.putInt(DISPLAY_MODE.name, DISPLAY_MODE_BROWSER);
     mBundle.putString(CONTEXT_ID.name, null);
     mBundle.putString(UNSAFE_CONTEXT_ID.name, null);
+    mBundle.putLong(BROWSING_CONTEXT_GROUP_ID, -1L);
   }
 
   /**
@@ -639,6 +647,12 @@ public final class GeckoSessionSettings implements Parcelable {
   private void setContextId(final @Nullable String value) {
     setString(UNSAFE_CONTEXT_ID, value);
     setString(CONTEXT_ID, StorageController.createSafeSessionContextId(value));
+  }
+
+  /* package */ void setBrowsingContextGroupId(final long id) {
+    synchronized (mBundle) {
+      mBundle.putLong(BROWSING_CONTEXT_GROUP_ID, id);
+    }
   }
 
   private void setString(final Key<String> key, final String value) {

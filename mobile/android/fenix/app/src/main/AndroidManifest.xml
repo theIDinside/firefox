@@ -551,6 +551,16 @@
             android:windowSoftInputMode="adjustResize|stateAlwaysHidden" />
 
         <activity
+            android:name=".pictureinpicture.PictureInPictureActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/NormalTheme" />
+
+        <activity
             android:name=".IntentReceiverActivity"
             android:theme="@style/Theme.Transparent"
             android:relinquishTaskIdentity="true"

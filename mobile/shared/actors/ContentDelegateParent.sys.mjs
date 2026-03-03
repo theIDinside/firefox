@@ -5,7 +5,14 @@
 import { GeckoViewUtils } from "resource://gre/modules/GeckoViewUtils.sys.mjs";
 import { GeckoViewActorParent } from "resource://gre/modules/GeckoViewActorParent.sys.mjs";
 
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  EventDispatcher: "resource://gre/modules/Messaging.sys.mjs",
+});
+
 const { debug, warn } = GeckoViewUtils.initLogging("ContentDelegateParent");
+
+let gPendingPiP = null;
 
 export class ContentDelegateParent extends GeckoViewActorParent {
   didDestroy() {
@@ -61,6 +68,32 @@ export class ContentDelegateParent extends GeckoViewActorParent {
         return this.eventDispatcher.sendRequest({
           type: "GeckoView:PaintStatusReset",
         });
+      }
+
+      case "GeckoView:LaunchPictureInPicture": {
+        const bc = this.manager.browsingContext;
+        gPendingPiP = { videoRef: aMsg.data.videoRef };
+        // This kind of design is not great. We want observability,
+        // so that nsIPictureInPictureFunction's promise when it resolves, the _entire_
+        // process is actually complete (or failed). See how it's done on desktop.
+        // This really is important, for stability, otherwise you have msg in flight
+        // and you have a hard time tracking what is where and what goes wrong if it does.
+        lazy.EventDispatcher.instance.sendRequest({
+          type: "GeckoView:LaunchPictureInPicture",
+          videoRef: aMsg.data.videoRef,
+          browsingContextId: bc.id,
+          browsingContextGroupId: bc.group.id,
+        });
+        return null;
+      }
+
+      case "GeckoView:PiPPlayerReady": {
+        if (gPendingPiP) {
+          const { videoRef } = gPendingPiP;
+          gPendingPiP = null;
+          this.sendAsyncMessage("GeckoView:PiPClone", { videoRef });
+        }
+        return null;
       }
     }
 

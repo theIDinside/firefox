@@ -264,6 +264,16 @@ pictureinpicture:
     extra_keys: *pictureinpicture_opened_method_extra
     telemetry_mirror: Pictureinpicture_OpenedMethod_Autopip
 
+  opened_method_request:
+    type: event
+    description: >
+      Records the method for opening the Picture-in-Picture window.
+    bugs: *pictureinpicture_opened_method_bugs
+    data_reviews: *pictureinpicture_opened_method_data_reviews
+    notification_emails: *pictureinpicture_opened_method_emails
+    expires: never
+    extra_keys: *pictureinpicture_opened_method_extra
+
   closed_method_close_button:
     type: event
     description: >
@@ -426,6 +436,17 @@ pictureinpicture:
     notification_emails: *pictureinpicture_closed_method_emails
     expires: never
     telemetry_mirror: Pictureinpicture_ClosedMethod_Browsercrash
+
+  closed_method_programmatic:
+    type: event
+    description: >
+      Records the method for closing the Picture-in-Picture window.
+      This event was generated to correspond to the Legacy Telemetry event
+      pictureinpicture.closed_method#programmatic.
+    bugs: *pictureinpicture_closed_method_bugs
+    data_reviews: *pictureinpicture_closed_method_data_reviews
+    notification_emails: *pictureinpicture_closed_method_emails
+    expires: never
 
   subtitles_shown_subtitles:
     type: event

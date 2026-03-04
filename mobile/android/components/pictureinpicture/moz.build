@@ -5,9 +5,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 with Files("**"):
-    BUG_COMPONENT = ("GeckoView", "General")
+    BUG_COMPONENT = ("Firefox for Android", "Picture-in-Picture")
 
-DIRS += [
-    "geckoview",
-    "pictureinpicture",
+EXTRA_JS_MODULES += [
+    "AndroidPictureInPicture.sys.mjs",
+    "PictureInPictureFunctionsAndroid.sys.mjs",
+]
+
+XPCOM_MANIFESTS += [
+    "components.conf",
 ]

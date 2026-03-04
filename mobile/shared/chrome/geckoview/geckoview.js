@@ -575,6 +575,18 @@ function startup() {
   GeckoViewUtils.initLogging("XUL", window);
 
   const browser = createBrowser();
+
+  const browsingContextGroupId = window.arguments[0].QueryInterface(
+    Ci.nsIGeckoViewView
+  ).initData.settings?.browsingContextGroupId;
+
+  if (browsingContextGroupId > 0) {
+    browser.setAttribute(
+      "initialBrowsingContextGroupId",
+      browsingContextGroupId
+    );
+  }
+
   ModuleManager.init(browser, [
     {
       name: "GeckoViewContent",

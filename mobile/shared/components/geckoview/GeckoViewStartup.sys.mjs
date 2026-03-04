@@ -39,6 +39,18 @@ const JSPROCESSACTORS = {
 };
 
 const JSWINDOWACTORS = {
+  AndroidPictureInPicture: {
+    parent: {
+      esModuleURI: "resource:///actors/AndroidPictureInPictureParent.sys.mjs",
+    },
+    child: {
+      esModuleURI: "resource:///actors/AndroidPictureInPictureChild.sys.mjs",
+      events: {
+        DOMContentLoaded: {},
+      },
+    },
+    messageManagerGroups: ["browsers"],
+  },
   LoadURIDelegate: {
     parent: {
       esModuleURI: "resource:///actors/LoadURIDelegateParent.sys.mjs",

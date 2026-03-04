@@ -33,6 +33,8 @@ interface mixin DocumentOrShadowRoot {
   readonly attribute Element? fullscreenElement;
   [BinaryName="fullscreenElement"]
   readonly attribute Element? mozFullScreenElement;
+  [Pref="dom.picture-in-picture.enabled"]
+  readonly attribute Element? pictureInPictureElement;
 };
 
 // https://drafts.csswg.org/web-animations-1/#extensions-to-the-documentorshadowroot-interface-mixin

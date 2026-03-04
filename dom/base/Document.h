@@ -53,6 +53,7 @@
 #include "mozilla/dom/EventTarget.h"
 #include "mozilla/dom/LargestContentfulPaint.h"
 #include "mozilla/dom/Nullable.h"
+#include "mozilla/dom/PictureInPictureWindow.h"
 #include "mozilla/dom/RadioGroupContainer.h"
 #include "mozilla/dom/TreeOrderedArray.h"
 #include "mozilla/dom/UserActivation.h"
@@ -3591,6 +3592,21 @@ class Document : public nsINode,
     return !GetFullscreenError(aCallerType);
   }
 
+  // Picture-in-Picture API
+  bool PictureInPictureEnabled() const {
+    return PictureInPictureWindow::PictureInPictureEnabled();
+  }
+
+  Element* GetPictureInPictureElementInternal() const {
+    return mPictureInPictureElement;
+  }
+
+  void SetPictureInPictureElement(Element* aElement) {
+    mPictureInPictureElement = aElement;
+  }
+
+  already_AddRefed<Promise> ExitPictureInPicture(ErrorResult& aRv);
+
   void GetWireframeWithoutFlushing(bool aIncludeNodes, Nullable<Wireframe>&);
 
   MOZ_CAN_RUN_SCRIPT void GetWireframe(bool aIncludeNodes,
@@ -5441,6 +5457,9 @@ class Document : public nsINode,
   // The <div class="moz-custom-content-container"> that we use to wrap all the
   // mAnonymousContents roots. It's a NAC root, child of the root element.
   RefPtr<Element> mCustomContentContainer;
+
+  // Picture-in-Picture API: tracks the current PiP element
+  RefPtr<Element> mPictureInPictureElement;
 
   uint32_t mBlockDOMContentLoaded;
 

@@ -7,6 +7,12 @@ import { GeckoViewActorParent } from "resource://gre/modules/GeckoViewActorParen
 
 const { debug, warn } = GeckoViewUtils.initLogging("ContentDelegateParent");
 
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  AndroidPictureInPicture:
+    "resource://gre/modules/AndroidPictureInPicture.sys.mjs",
+});
+
 export class ContentDelegateParent extends GeckoViewActorParent {
   didDestroy() {
     this._didDestroy = true;
@@ -17,6 +23,7 @@ export class ContentDelegateParent extends GeckoViewActorParent {
 
     switch (aMsg.name) {
       case "GeckoView:DOMFullscreenExit": {
+        lazy.AndroidPictureInPicture.clearFullscreenContext();
         if (!this.#hasBeenDestroyed() && !this.#requestOrigin) {
           this.#requestOrigin = this;
         }
@@ -61,6 +68,10 @@ export class ContentDelegateParent extends GeckoViewActorParent {
         return this.eventDispatcher.sendRequest({
           type: "GeckoView:PaintStatusReset",
         });
+      }
+      case "GeckoView:SetFullscreenContext": {
+        lazy.AndroidPictureInPicture.setFullscreenContext(aMsg.data);
+        break;
       }
     }
 

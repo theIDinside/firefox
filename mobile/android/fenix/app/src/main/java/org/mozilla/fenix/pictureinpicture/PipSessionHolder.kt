@@ -21,6 +21,9 @@ object PipSessionHolder {
 
     var activeActivity: WeakReference<PictureInPictureActivity>? = null
 
+    var fullscreenBrowsingContextId: Long = -1
+    var fullscreenBrowsingContextGroupId: Long = -1
+
     fun take(): GeckoSession? {
         val s = session
         Log.d(TAG, "take: returning ${if (s != null) "non-null" else "null"} session")

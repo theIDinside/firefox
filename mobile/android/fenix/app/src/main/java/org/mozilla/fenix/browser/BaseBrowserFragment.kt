@@ -91,6 +91,11 @@ import mozilla.components.feature.downloads.temporary.ShareResourceFeature
 import mozilla.components.feature.findinpage.view.FindInPageBar
 import mozilla.components.feature.intent.ext.EXTRA_SESSION_ID
 import mozilla.components.feature.media.fullscreen.MediaSessionFullscreenFeature
+import org.mozilla.gecko.EventDispatcher
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoSessionSettings
+import org.mozilla.fenix.pictureinpicture.PictureInPictureActivity
+import org.mozilla.fenix.pictureinpicture.PipSessionHolder
 import mozilla.components.feature.privatemode.feature.SecureWindowFeature
 import mozilla.components.feature.prompts.PromptFeature
 import mozilla.components.feature.prompts.PromptFeature.Companion.PIN_REQUEST

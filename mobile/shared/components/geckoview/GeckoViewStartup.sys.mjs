@@ -167,6 +167,11 @@ export class GeckoViewStartup {
             });
           }
 
+          GeckoViewUtils.addLazyGetter(this, "AndroidPictureInPicture", {
+            module: "resource://gre/modules/AndroidPictureInPicture.sys.mjs",
+            ged: ["GeckoView:UserAgentPictureInPictureRequest"],
+          });
+
           GeckoViewUtils.addLazyGetter(this, "GeckoViewWebExtension", {
             module: "resource://gre/modules/GeckoViewWebExtension.sys.mjs",
             ged: [

@@ -10,11 +10,13 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ManifestObtainer: "resource://gre/modules/ManifestObtainer.sys.mjs",
   SelectionUtils: "resource://gre/modules/SelectionUtils.sys.mjs",
   SpellCheckHelper: "resource://gre/modules/InlineSpellChecker.sys.mjs",
+  ContentDOMReference: "resource://gre/modules/ContentDOMReference.sys.mjs",
 });
 
 const MAX_TEXT_LENGTH = 4096;
 
 export class ContentDelegateChild extends GeckoViewActorChild {
+
   notifyParentOfViewportFit() {
     if (this.triggerViewportFitChange) {
       this.contentWindow.cancelIdleCallback(this.triggerViewportFitChange);
@@ -209,7 +211,24 @@ export class ContentDelegateChild extends GeckoViewActorChild {
         this.sendAsyncMessage("GeckoView:DOMFullscreenRequest");
         break;
       }
-      case "MozDOMFullscreen:Entered":
+      case "MozDOMFullscreen:Entered": {
+        if (
+          HTMLVideoElement.isInstance(
+            this.contentWindow?.document.fullscreenElement
+          )
+        ) {
+          // Stash this video element reference. That way we can do user agent PIP.
+          const videoRef = lazy.ContentDOMReference.get(
+            this.contentWindow?.document.fullscreenElement
+          );
+          this.sendAsyncMessage("GeckoView:SetFullscreenContext", {
+            videoRef,
+            browsingContextId: this.browsingContext.id,
+            browsingContextGroupId: this.browsingContext.group.id,
+          });
+        }
+        break;
+      }
       case "MozDOMFullscreen:Exited":
         // Content may change fullscreen state by itself, and we should ensure
         // that the parent always exits fullscreen when content has left
@@ -254,6 +273,14 @@ export class ContentDelegateChild extends GeckoViewActorChild {
         this.sendAsyncMessage("GeckoView:PaintStatusReset");
         break;
       }
+    }
+  }
+
+  receiveMessage(aMsg) {
+    switch (aMsg.name) {
+      case "GeckoView:ExitFullscreen":
+        this.contentWindow?.document.exitFullscreen();
+        break;
     }
   }
 }

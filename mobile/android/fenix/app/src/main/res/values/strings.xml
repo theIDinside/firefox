@@ -3799,4 +3799,8 @@
     <string name="privacy_notice_updated_homepage_message_privacy_notice" tools:ignore="UnusedResources">Privacy Notice</string>
     <!-- The second active link used in privacy_notice_updated_homepage_message -->
     <string name="privacy_notice_updated_homepage_message_learn_more" tools:ignore="UnusedResources">Learn more</string>
+    <!-- Notification channel name for the Picture-in-Picture bubble -->
+    <string name="pip_bubble_channel_name">Picture-in-Picture</string>
+    <!-- Notification title shown when a video is playing fullscreen and PIP is available -->
+    <string name="pip_bubble_notification_title">Tap to enter Picture-in-Picture</string>
 </resources>

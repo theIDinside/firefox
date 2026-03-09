@@ -3891,7 +3891,7 @@
 # Enable the Picture-in-Picture API
 - name: dom.picture-in-picture.enabled
   type: bool
-  value: false
+  value: true
   mirror: always
 
 # User pref to control whether Private Attribution

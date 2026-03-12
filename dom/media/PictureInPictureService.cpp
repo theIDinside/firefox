@@ -47,15 +47,18 @@ bool PictureInPictureService::IsSupported() {
 void PictureInPictureService::FinishRequestAndResumeNextQueued() {
   MOZ_ASSERT(NS_IsMainThread());
 
+  if (!gPictureInPictureService) {
+    return;
+  }
+
   gPictureInPictureService->mWebContentRequests.RemoveElementAt(0);
 
   if (!gPictureInPictureService->mWebContentRequests.IsEmpty()) {
     NS_DispatchToMainThread(NS_NewRunnableFunction(
         "PictureInPictureService::QueueNewRequestForParallelSteps", []() {
           if (!gPictureInPictureService->mWebContentRequests.IsEmpty()) {
-            if (gPictureInPictureService->mWebContentRequests[0]
-                    ->StartParallelSteps()) {
-            }
+            gPictureInPictureService->mWebContentRequests[0]
+                ->StartParallelSteps();
           }
         }));
   }
@@ -77,6 +80,8 @@ void PictureInPictureService::RunInParallel(
 /* static */
 RefPtr<Promise> PictureInPictureService::RequestPictureInPictureWindow(
     HTMLVideoElement* aElement, PictureInPictureWindow* aWindow) {
+  MOZ_ASSERT(gPictureInPictureService);
+
   if (!IsSupported()) {
     return nullptr;
   }
@@ -102,6 +107,7 @@ RefPtr<Promise> PictureInPictureService::RequestPictureInPictureWindow(
 /* static */
 RefPtr<Promise> PictureInPictureService::ExitPictureInPictureWindow(
     HTMLVideoElement* aElement) {
+  MOZ_ASSERT(gPictureInPictureService);
   if (!IsSupported()) {
     return nullptr;
   }
@@ -161,12 +167,12 @@ EnterPictureInPictureRequest::EnterPictureInPictureRequest(
     Promise* aPromise, HTMLVideoElement* aVideo)
     : PictureInPictureRequest(std::move(aPromise), aVideo) {}
 
-bool EnterPictureInPictureRequest::StartParallelSteps() {
+void EnterPictureInPictureRequest::StartParallelSteps() {
   Document* doc = mVideo->OwnerDoc();
   nsPIDOMWindowInner* window = doc ? doc->GetInnerWindow() : nullptr;
   if (!doc || !window) {
     mPromise->MaybeRejectWithInvalidStateError("No document or window");
-    return false;
+    return;
   }
 
   // 9.1 If this is pictureInPictureElement:
@@ -178,7 +184,7 @@ bool EnterPictureInPictureRequest::StartParallelSteps() {
     MOZ_ASSERT(mVideo->GetAssociatedPictureInPictureWindow());
     mPromise->MaybeResolve(mVideo->GetAssociatedPictureInPictureWindow());
     PictureInPictureService::FinishRequestAndResumeNextQueued();
-    return false;
+    return;
   }
 
   // Stash the PIP Window instance for later use as well as we need to be
@@ -198,12 +204,11 @@ bool EnterPictureInPictureRequest::StartParallelSteps() {
     // event task source given global and reject the promise with an
     // InvalidStateError.
     mPromise->MaybeRejectWithInvalidStateError("Failed to create PIP Window");
-    return false;
+    return;
   }
 
   // Remainder of parallel steps happen when 9.2 completes
   servicePromise->AppendNativeHandler(this);
-  return true;
 }
 
 void EnterPictureInPictureRequest::FireEnterPictureInPictureEvent() {
@@ -225,20 +230,27 @@ void EnterPictureInPictureRequest::OnServicePromiseSettled(bool aResolved) {
   // 9.3 Queue a global task on the media element event task source given
   // global, to perform the following steps:
   if (aResolved && mVideo && mPromise) {
-    // 9.3.1 Set pictureInPictureElement to this.
-    if (Document* doc = mVideo->OwnerDoc()) {
-      doc->SetPictureInPictureElement(mVideo);
-    }
-    // TODO: *Maybe*? This is a hack in the spec. Other specs
-    // 9.3.2 Append relevant settings object’s origin to initiators of active
-    // Picture-in-Picture sessions.
 
+    // Not defined where this should happen, but it's safe here, 
+    // opening a pip window has succeeded.
     mVideo->AddStates(ElementState::PICTURE_IN_PICTURE);
     mVideo->SetAssociatedPictureInPictureWindow(
         mPictureInPictureWindowInstance);
 
-    // 9.3.3 If pictureInPictureElement is fullscreenElement, it is RECOMMENDED
-    // to exit fullscreen.
+    // 9.3.1 Set pictureInPictureElement to this.
+    Document* doc = mVideo->OwnerDoc();
+    if (doc) {
+      doc->SetPictureInPictureElement(mVideo);
+      // 9.3.3 If pictureInPictureElement is fullscreenElement, it is RECOMMENDED
+      // to exit fullscreen.
+      if (doc->GetFullscreenElement() == mVideo) {
+        Document::AsyncExitFullscreen(doc);
+      }
+    }
+    
+    // 9.3.2 Append relevant settings object’s origin to initiators of active
+    // Picture-in-Picture sessions.
+    
 
     // 9.3.4
     FireEnterPictureInPictureEvent();
@@ -257,14 +269,14 @@ ExitPictureInPictureRequest::ExitPictureInPictureRequest(
     : PictureInPictureRequest(std::move(aPromise), aVideo) {}
 
 // https://w3c.github.io/picture-in-picture/#exit-pip
-bool ExitPictureInPictureRequest::StartParallelSteps() {
+void ExitPictureInPictureRequest::StartParallelSteps() {
   Document* doc = mVideo->OwnerDoc();
 
   // Note: Spec needs update for this check, due to it's in-parallel nature.
   if (!doc->GetPictureInPictureElementInternal()) {
     mPromise->MaybeResolveWithUndefined();
     PictureInPictureService::FinishRequestAndResumeNextQueued();
-    return false;
+    return;
   }
 
   // 2. Run the close window algorithm with the Picture-in-Picture window
@@ -276,14 +288,13 @@ bool ExitPictureInPictureRequest::StartParallelSteps() {
   if (!servicePromise) {
     mPromise->MaybeRejectWithInvalidStateError(
         "Failed to create exit picture in picture request.");
-    return false;
+    return;
   }
 
   // Remainder of exit steps happen in HTMLVideoElement::EndCloningVisually
   // as this can be called via web content JS, but also via the "native to
   // Firefox" PIP implementation.
   servicePromise->AppendNativeHandler(this);
-  return true;
 }
 
 void ExitPictureInPictureRequest::OnServicePromiseSettled(bool aResolved) {

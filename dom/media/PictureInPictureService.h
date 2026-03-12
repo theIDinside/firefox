@@ -65,6 +65,8 @@ class PictureInPictureService {
  private:
   ~PictureInPictureService() = default;
 
+  // Initialize the platform-specific implementation of
+  // nsIPictureInPictureFunctions.idl
   bool InitializeFunctions();
 
   nsCOMPtr<nsIPictureInPictureFunctions> mPictureInPictureFunctions;
@@ -81,8 +83,8 @@ class PictureInPictureRequest : public PromiseNativeHandler {
   PictureInPictureRequest(Promise* aPromise, HTMLVideoElement* aVideo);
 
   // In-parallel steps of the requestPictureInPicture algorithm, but running on
-  // the main thread Returns true if the parallel steps has more to do
-  virtual bool StartParallelSteps() = 0;
+  // the main thread
+  virtual void StartParallelSteps() = 0;
 
   // PromiseNativeHandler implementation
   void ResolvedCallback(JSContext* aCx, JS::Handle<JS::Value> aValue,
@@ -105,7 +107,7 @@ class EnterPictureInPictureRequest final : public PictureInPictureRequest {
  public:
   EnterPictureInPictureRequest(Promise* aPromise, HTMLVideoElement* aVideo);
   virtual ~EnterPictureInPictureRequest() override = default;
-  bool StartParallelSteps() override;
+  void StartParallelSteps() override;
   void OnServicePromiseSettled(bool aResolved) override;
 };
 
@@ -113,7 +115,7 @@ class ExitPictureInPictureRequest final : public PictureInPictureRequest {
  public:
   ExitPictureInPictureRequest(Promise* aPromise, HTMLVideoElement* aVideo);
   virtual ~ExitPictureInPictureRequest() override = default;
-  bool StartParallelSteps() override;
+  void StartParallelSteps() override;
   void OnServicePromiseSettled(bool aResolved) override;
 
  private:

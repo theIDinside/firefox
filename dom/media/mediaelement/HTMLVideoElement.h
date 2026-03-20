@@ -24,6 +24,8 @@ namespace dom {
 
 class WakeLock;
 class VideoPlaybackQuality;
+class EventHandlerNonNull;
+class PictureInPictureWindow;
 
 class HTMLVideoElement final : public HTMLMediaElement {
   class SecondaryVideoOutput;
@@ -132,6 +134,16 @@ class HTMLVideoElement final : public HTMLMediaElement {
 
   void OnVisibilityChange(Visibility aNewVisibility) override;
 
+  void ClosePictureInPictureWindowAndFireEvent();
+
+  already_AddRefed<Promise> RequestPictureInPicture(ErrorResult& aRv);
+
+  // Picture-in-Picture event handlers
+  EventHandlerNonNull* GetOnenterpictureinpicture();
+  void SetOnenterpictureinpicture(EventHandlerNonNull* aCallback);
+  EventHandlerNonNull* GetOnleavepictureinpicture();
+  void SetOnleavepictureinpicture(EventHandlerNonNull* aCallback);
+
   bool DisablePictureInPicture() const {
     return GetBoolAttr(nsGkAtoms::disablepictureinpicture);
   }
@@ -139,6 +151,9 @@ class HTMLVideoElement final : public HTMLMediaElement {
   void SetDisablePictureInPicture(bool aValue, ErrorResult& aError) {
     SetHTMLBoolAttr(nsGkAtoms::disablepictureinpicture, aValue, aError);
   }
+
+  void SetAssociatedPictureInPictureWindow(PictureInPictureWindow* aWindow);
+  PictureInPictureWindow* GetAssociatedPictureInPictureWindow() const;
 
  protected:
   virtual ~HTMLVideoElement();
@@ -200,6 +215,9 @@ class HTMLVideoElement final : public HTMLMediaElement {
   // Please don't set this to non-nullptr values directly - use
   // SetVisualCloneTarget() instead.
   RefPtr<HTMLVideoElement> mVisualCloneSource;
+
+  // Reference to the current PictureInPictureWindow for this video element
+  RefPtr<PictureInPictureWindow> mPictureInPictureWindow;
 
  private:
   void ResetState() override;

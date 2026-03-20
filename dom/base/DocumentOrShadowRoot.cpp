@@ -334,6 +334,35 @@ Element* DocumentOrShadowRoot::GetFullscreenElement() const {
   return Element::FromNodeOrNull(Retarget(element));
 }
 
+// https://w3c.github.io/picture-in-picture/#dom-documentorshadowroot-pictureinpictureelement
+// Step 3 says:
+// "If candidate and this are in the same tree, return candidate and abort these
+// steps." We do not do this (at first). Because it is expected to be able to
+// PIP unbound elements. Requiring the candidate to be in the same tree means
+// that would not work. Spec bug.
+Element* DocumentOrShadowRoot::GetPictureInPictureElement() const {
+  if (!AsNode().IsInComposedDoc()) {
+    return nullptr;
+  }
+
+  Element* candidate = Element::FromNodeOrNull(nsContentUtils::Retarget(
+      AsNode().OwnerDoc()->GetPictureInPictureElementInternal(), mAsNode));
+
+  // If element is not null & and not in a composed doc, we have an unbound
+  // element that should be returned. If candidate is null we should return
+  // null.
+  if (!candidate || !candidate->IsInComposedDoc()) {
+    return candidate;
+  }
+
+  // The element lives in a light DOM or an unrelated shadow tree and should
+  // return null.
+  if (candidate->SubtreeRoot() != &AsNode()) {
+    return nullptr;
+  }
+  return candidate;
+}
+
 namespace {
 
 using FrameForPointOption = nsLayoutUtils::FrameForPointOption;

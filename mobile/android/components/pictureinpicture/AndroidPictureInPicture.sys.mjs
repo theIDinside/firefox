@@ -22,13 +22,11 @@ export const AndroidPictureInPicture = {
     const { promise, resolve, reject } = Promise.withResolvers();
     gPendingPiP.set(bcGroupId, { sourceBcId, videoRef, resolve, reject });
 
-    lazy.EventDispatcher.instance.sendRequest(
-      "GeckoView:LaunchPictureInPicture",
-      {
-        browsingContextId: sourceBcId,
-        browsingContextGroupId: bcGroupId,
-      }
-    );
+    lazy.EventDispatcher.instance.sendRequest({
+      type: "GeckoView:LaunchPictureInPicture",
+      browsingContextId: sourceBcId,
+      browsingContextGroupId: bcGroupId,
+    });
 
     return promise;
   },
@@ -38,9 +36,9 @@ export const AndroidPictureInPicture = {
       return Promise.resolve();
     }
     gActivePiP.delete(bcGroupId);
-    lazy.EventDispatcher.instance.sendRequest(
-      "GeckoView:ClosePictureInPicture"
-    );
+    lazy.EventDispatcher.instance.sendRequest({
+      type: "GeckoView:ClosePictureInPicture",
+    });
     return Promise.resolve();
   },
 

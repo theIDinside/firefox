@@ -278,6 +278,8 @@ public class GeckoSession {
 
   private boolean mShouldPinOnScreen;
 
+  private @Nullable GeckoBundle mContextMenuVideoRef;
+
   // All fields are accessed on UI thread only.
   private PanZoomController mPanZoomController = new PanZoomController(this);
   private OverscrollEdgeEffect mOverscroll;
@@ -584,6 +586,7 @@ public class GeckoSession {
             close();
             delegate.onKill(GeckoSession.this);
           } else if ("GeckoView:ContextMenu".equals(event)) {
+            mContextMenuVideoRef = message.getBundle("videoRef");
             final ContentDelegate.ContextElement elem =
                 new ContentDelegate.ContextElement(
                     message.getString("baseUri"),
@@ -3399,6 +3402,20 @@ public class GeckoSession {
   @AnyThread
   public void exitFullScreen() {
     mEventDispatcher.dispatch("GeckoViewContent:ExitFullScreen", null);
+  }
+
+  /**
+   * Requests native picture-in-picture for the video element from the most recent context menu
+   * long-press. Does nothing if the last context menu was not on a video element.
+   */
+  @UiThread
+  public void requestPictureInPicture() {
+    if (mContextMenuVideoRef == null) {
+      return;
+    }
+    final GeckoBundle bundle = new GeckoBundle();
+    bundle.putBundle("videoRef", mContextMenuVideoRef);
+    mEventDispatcher.dispatch("GeckoViewContent:RequestPictureInPicture", bundle);
   }
 
   /**

@@ -57,4 +57,6 @@
     <string name="mozac_selection_context_menu_email">Email</string>
     <!-- Action shown in a text selection context menu. This will prompt a new call from the selected text. -->
     <string name="mozac_selection_context_menu_call">Call</string>
+    <!-- Text for context menu item to enter picture-in-picture mode for a video. -->
+    <string name="mozac_feature_contextmenu_enter_picture_in_picture">Picture-in-Picture</string>
 </resources>

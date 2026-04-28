@@ -803,6 +803,11 @@ class BrowserFragment : BaseBrowserFragment(), UserInteractionHandler, SystemIns
         ) + ContextMenuCandidate.createOpenInExternalAppCandidate(
             requireContext(),
             contextMenuCandidateAppLinksUseCases,
+        ) + ContextMenuCandidate.createEnterPictureInPictureCandidate(
+            context = requireContext(),
+            onRequestPictureInPicture = { sessionState ->
+                sessionState.engineState.engineSession?.requestPictureInPicture()
+            },
         )
     }
 

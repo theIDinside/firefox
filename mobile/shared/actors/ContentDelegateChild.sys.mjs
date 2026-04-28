@@ -7,6 +7,7 @@ import { GeckoViewActorChild } from "resource://gre/modules/GeckoViewActorChild.
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
+  ContentDOMReference: "resource://gre/modules/ContentDOMReference.sys.mjs",
   ManifestObtainer: "resource://gre/modules/ManifestObtainer.sys.mjs",
   SelectionUtils: "resource://gre/modules/SelectionUtils.sys.mjs",
   SpellCheckHelper: "resource://gre/modules/InlineSpellChecker.sys.mjs",
@@ -175,6 +176,7 @@ export class ContentDelegateChild extends GeckoViewActorChild {
         }
 
         if (uri || isImage || isMedia) {
+          const isVideo = elementType === "HTMLVideoElement";
           const msg = {
             // We don't have full zoom on Android, so using CSS coordinates
             // here is fine, since the CSS coordinate spaces match between the
@@ -198,6 +200,7 @@ export class ContentDelegateChild extends GeckoViewActorChild {
               (node.innerText &&
                 node.innerText.substring(0, MAX_TEXT_LENGTH)) ||
               null,
+            videoRef: isVideo ? lazy.ContentDOMReference.get(node) : null,
           };
 
           this.sendAsyncMessage("GeckoView:ContextMenu", msg);

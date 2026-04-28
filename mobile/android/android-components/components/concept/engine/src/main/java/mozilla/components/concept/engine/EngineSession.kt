@@ -1155,6 +1155,11 @@ abstract class EngineSession(
     open fun onPipModeChanged(enabled: Boolean) = Unit
 
     /**
+     * Requests native picture-in-picture for the video from the most recent context menu long-press.
+     */
+    open fun requestPictureInPicture() = Unit
+
+    /**
      * Gets the page text content of this session
      */
     open fun getPageContent(onResult: (String) -> Unit, onException: (Throwable) -> Unit) = Unit

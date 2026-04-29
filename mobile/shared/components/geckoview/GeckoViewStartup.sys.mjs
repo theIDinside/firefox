@@ -47,8 +47,12 @@ const JSWINDOWACTORS = {
       esModuleURI: "resource:///actors/AndroidPictureInPictureChild.sys.mjs",
       events: {
         DOMContentLoaded: {},
+        playing: { capture: true },
+        pause: { capture: true },
+        ended: { capture: true },
       },
     },
+    allFrames: true,
     messageManagerGroups: ["browsers"],
   },
   LoadURIDelegate: {

@@ -15,11 +15,11 @@ import org.mozilla.geckoview.PictureInPictureController
  * @param onExitPictureInPicture Called when the picture-in-picture window should be closed.
  */
 class GeckoPictureInPictureDelegate(
-    private val onEnterPictureInPicture: (browsingContextId: Long, browsingContextGroupId: Long) -> Unit,
+    private val onEnterPictureInPicture: (browsingContextId: Long, browsingContextGroupId: Long, remoteType: String?) -> Unit,
     private val onExitPictureInPicture: () -> Unit,
 ) : PictureInPictureController.Delegate {
-    override fun onEnterPictureInPicture(browsingContextId: Long, browsingContextGroupId: Long) {
-        onEnterPictureInPicture.invoke(browsingContextId, browsingContextGroupId)
+    override fun onEnterPictureInPicture(browsingContextId: Long, browsingContextGroupId: Long, remoteType: String?) {
+        onEnterPictureInPicture.invoke(browsingContextId, browsingContextGroupId, remoteType)
     }
 
     override fun onExitPictureInPicture() {

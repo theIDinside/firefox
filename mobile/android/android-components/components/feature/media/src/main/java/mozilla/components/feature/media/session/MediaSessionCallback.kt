@@ -4,9 +4,11 @@
 
 package mozilla.components.feature.media.session
 
+import android.os.Bundle
 import android.support.v4.media.session.MediaSessionCompat
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.feature.media.ext.findActiveMediaTab
+import mozilla.components.feature.media.ext.CUSTOM_ACTION_PIP
 import mozilla.components.support.base.log.logger.Logger
 
 internal class MediaSessionCallback(
@@ -24,5 +26,13 @@ internal class MediaSessionCallback(
         logger.debug("pause()")
 
         store.state.findActiveMediaTab()?.mediaSessionState?.controller?.pause()
+    }
+
+    override fun onCustomAction(action: String, extras: Bundle?) {
+        logger.debug("customAction: $action")
+
+        if (action == CUSTOM_ACTION_PIP) {
+            store.state.findActiveMediaTab()?.engineState?.engineSession?.requestPictureInPicture()
+        }
     }
 }

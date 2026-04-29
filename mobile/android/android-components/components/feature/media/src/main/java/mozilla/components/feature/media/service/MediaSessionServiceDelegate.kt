@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import mozilla.components.browser.state.selector.findTabOrCustomTab
 import mozilla.components.browser.state.state.SessionState
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.concept.base.crash.CrashReporting
@@ -128,6 +129,13 @@ internal class MediaSessionServiceDelegate(
             AbstractMediaSessionService.ACTION_PAUSE -> {
                 controller?.pause()
                 emitNotificationPauseFact()
+            }
+            AbstractMediaSessionService.ACTION_PIP -> {
+                val tabId = intent.getStringExtra(AbstractMediaSessionService.EXTRA_TAB_ID)
+                if (tabId != null) {
+                    store.state.findTabOrCustomTab(tabId)
+                        ?.engineState?.engineSession?.requestPictureInPicture()
+                }
             }
             else -> logger.debug("Can't process action: ${intent?.action}")
         }

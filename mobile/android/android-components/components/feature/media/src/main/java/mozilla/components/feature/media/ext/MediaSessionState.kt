@@ -7,12 +7,15 @@ package mozilla.components.feature.media.ext
 import android.support.v4.media.session.PlaybackStateCompat
 import mozilla.components.browser.state.state.MediaSessionState
 import mozilla.components.concept.engine.mediasession.MediaSession
+import mozilla.components.feature.media.R
+
+internal const val CUSTOM_ACTION_PIP = "mozac.feature.media.action.PIP"
 
 /**
  * Turns the [MediaSessionState] into a [PlaybackStateCompat] to be used with a `MediaSession`.
  */
-internal fun MediaSessionState.toPlaybackState() =
-    PlaybackStateCompat.Builder()
+internal fun MediaSessionState.toPlaybackState(): PlaybackStateCompat {
+    val builder = PlaybackStateCompat.Builder()
         .setActions(
             PlaybackStateCompat.ACTION_PLAY_PAUSE or
                 PlaybackStateCompat.ACTION_PLAY or
@@ -34,7 +37,19 @@ internal fun MediaSessionState.toPlaybackState() =
                 else -> 0.0f
             },
         )
-        .build()
+
+    if (playbackState == MediaSession.PlaybackState.PLAYING) {
+        builder.addCustomAction(
+            PlaybackStateCompat.CustomAction.Builder(
+                CUSTOM_ACTION_PIP,
+                "Picture-in-Picture",
+                R.drawable.mozac_feature_media_action_pip,
+            ).build(),
+        )
+    }
+
+    return builder.build()
+}
 
 /**
  * If this state is [MediaSession.PlaybackState.PLAYING] then return true, else return false.

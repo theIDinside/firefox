@@ -15,6 +15,7 @@ export class GeckoViewContent extends GeckoViewModule {
     this.registerListener([
       "GeckoViewContent:ExitFullScreen",
       "GeckoViewContent:RequestPictureInPicture",
+      "GeckoViewContent:RequestPictureInPictureForCurrentMedia",
       "GeckoView:ClearMatches",
       "GeckoView:DisplayMatches",
       "GeckoView:FindInPage",
@@ -202,6 +203,9 @@ export class GeckoViewContent extends GeckoViewModule {
         lazy.AndroidPictureInPicture.request(wgp, videoRef);
         break;
       }
+      case "GeckoViewContent:RequestPictureInPictureForCurrentMedia":
+        this._requestPictureInPictureForCurrentMedia();
+        break;
       case "GeckoView:ClearMatches": {
         if (!this.isPdfJs) {
           this._clearMatches();
@@ -273,9 +277,18 @@ export class GeckoViewContent extends GeckoViewModule {
       case "GeckoView:UpdateInitData":
         this.sendToAllChildren(aEvent, aData);
         break;
-      case "GeckoView:SetActive":
+      case "GeckoView:SetActive": {
+        const bcGroupId = this.browser.browsingContext.group.id;
+        if (!aData.active && lazy.AndroidPictureInPicture.hasActivePiP(bcGroupId)) {
+          lazy.AndroidPictureInPicture.setDeactivateCallback(bcGroupId, () => {
+            this.browser.docShellIsActive = false;
+          });
+          break;
+        }
+        lazy.AndroidPictureInPicture.clearDeactivateCallback(bcGroupId);
         this.browser.docShellIsActive = !!aData.active;
         break;
+      }
       case "GeckoView:SetFocused":
         if (aData.focused) {
           this.browser.focus();
@@ -610,6 +623,16 @@ export class GeckoViewContent extends GeckoViewModule {
     } else {
       finder.fastFind(aData.searchString, !!aData.linksOnly, drawOutline);
     }
+  }
+
+  _requestPictureInPictureForCurrentMedia() {
+    const bcGroupId = this.browser.browsingContext.group.id;
+    const active = lazy.AndroidPictureInPicture.getActiveVideoRef(bcGroupId);
+    debug`RequestPictureInPictureForCurrentMedia: browser bcgId=${bcGroupId} active=${!!active} activeVideoRef.bcId=${active?.videoRef?.browsingContextId} activeWgpOsPid=${active?.wgp?.osPid}`;
+    if (!active) {
+      return;
+    }
+    lazy.AndroidPictureInPicture.request(active.wgp, active.videoRef);
   }
 
   _clearMatches() {

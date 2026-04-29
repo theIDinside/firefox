@@ -86,6 +86,7 @@ abstract class AbstractMediaSessionService : Service() {
     companion object {
         internal const val ACTION_PLAY = "mozac.feature.mediasession.service.PLAY"
         internal const val ACTION_PAUSE = "mozac.feature.mediasession.service.PAUSE"
+        internal const val ACTION_PIP = "mozac.feature.mediasession.service.PIP"
 
         const val NOTIFICATION_TAG = "mozac.feature.mediasession.foreground-service"
         const val PENDING_INTENT_TAG = "mozac.feature.mediasession.pendingintent"
@@ -99,5 +100,11 @@ abstract class AbstractMediaSessionService : Service() {
         internal fun pauseIntent(context: Context, cls: Class<*>): Intent = Intent(ACTION_PAUSE).apply {
             component = ComponentName(context, cls)
         }
+
+        internal fun pipIntent(context: Context, cls: Class<*>, tabId: String): Intent =
+            Intent(ACTION_PIP).apply {
+                component = ComponentName(context, cls)
+                putExtra(EXTRA_TAB_ID, tabId)
+            }
     }
 }

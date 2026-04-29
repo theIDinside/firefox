@@ -4,6 +4,7 @@
 
 package org.mozilla.fenix.gecko
 
+import android.util.Log;
 import android.content.Context
 import android.content.Intent
 import androidx.annotation.VisibleForTesting
@@ -87,12 +88,14 @@ object GeckoProvider {
         )
 
         geckoRuntime.pictureInPictureDelegate = GeckoPictureInPictureDelegate(
-            onEnterPictureInPicture = { browsingContextId, browsingContextGroupId ->
-                val pipSession = GeckoSession(
-                    GeckoSessionSettings.Builder()
-                        .browsingContextGroupId(browsingContextGroupId)
-                        .build(),
-                )
+            onEnterPictureInPicture = { browsingContextId, browsingContextGroupId, remoteType ->
+                Log.d("PictureInPicture", "onEnterPictureInPicture, bc=" + browsingContextId + " bcg=" + browsingContextGroupId + " remoteType=" + remoteType)
+                val settingsBuilder = GeckoSessionSettings.Builder()
+                    .browsingContextGroupId(browsingContextGroupId)
+                if (remoteType != null) {
+                    settingsBuilder.remoteType(remoteType)
+                }
+                val pipSession = GeckoSession(settingsBuilder.build())
                 pipSession.open(geckoRuntime)
                 PipSessionHolder.sourceBrowsingContextId = browsingContextId
                 PipSessionHolder.session = pipSession

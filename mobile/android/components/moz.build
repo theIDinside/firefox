@@ -7,4 +7,5 @@ with Files("**"):
 
 DIRS += [
     "geckoview",
+    "pictureinpicture",
 ]

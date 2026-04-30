@@ -264,6 +264,7 @@ public final class GeckoRuntime implements Parcelable {
   private final ContentBlockingController mContentBlockingController;
   private final Autocomplete.StorageProxy mAutocompleteStorageProxy;
   private final CrashPullController.CrashPullProxy mCrashPullProxy;
+  private final PictureInPictureController.PictureInPictureProxy mPictureInPictureProxy;
   private final GeckoScreenChangeListener mScreenChangeListener;
 
   private GeckoRuntime() {
@@ -271,6 +272,7 @@ public final class GeckoRuntime implements Parcelable {
     mContentBlockingController = new ContentBlockingController();
     mAutocompleteStorageProxy = new Autocomplete.StorageProxy();
     mCrashPullProxy = new CrashPullController.CrashPullProxy();
+    mPictureInPictureProxy = new PictureInPictureController.PictureInPictureProxy();
     mScreenChangeListener = new GeckoScreenChangeListener();
 
     if (sRuntime != null) {
@@ -777,6 +779,19 @@ public final class GeckoRuntime implements Parcelable {
   public @Nullable CrashPullController.Delegate getCrashPullDelegate() {
     ThreadUtils.assertOnUiThread();
     return mCrashPullProxy.getDelegate();
+  }
+
+  @UiThread
+  public void setPictureInPictureDelegate(
+      final @Nullable PictureInPictureController.Delegate delegate) {
+    ThreadUtils.assertOnUiThread();
+    mPictureInPictureProxy.setDelegate(delegate);
+  }
+
+  @UiThread
+  public @Nullable PictureInPictureController.Delegate getPictureInPictureDelegate() {
+    ThreadUtils.assertOnUiThread();
+    return mPictureInPictureProxy.getDelegate();
   }
 
   /** Delegate for handling service worker events and requests. */

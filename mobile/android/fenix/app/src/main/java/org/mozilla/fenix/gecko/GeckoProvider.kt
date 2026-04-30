@@ -5,10 +5,12 @@
 package org.mozilla.fenix.gecko
 
 import android.content.Context
+import android.content.Intent
 import androidx.annotation.VisibleForTesting
 import mozilla.components.browser.engine.gecko.autofill.GeckoAutocompleteStorageDelegate
 import mozilla.components.browser.engine.gecko.crash.GeckoCrashPullDelegate
 import mozilla.components.browser.engine.gecko.ext.toContentBlockingSetting
+import mozilla.components.browser.engine.gecko.pictureinpicture.GeckoPictureInPictureDelegate
 import mozilla.components.concept.engine.EngineSession.TrackingProtectionPolicy
 import mozilla.components.concept.storage.CreditCardsAddressesStorage
 import mozilla.components.concept.storage.LoginsStorage
@@ -22,8 +24,12 @@ import org.mozilla.fenix.components.appstate.AppAction
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.nimbus.FxNimbus
+import org.mozilla.fenix.pictureinpicture.PictureInPictureActivity
+import org.mozilla.fenix.pictureinpicture.PipSessionHolder
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoSessionSettings
 
 object GeckoProvider {
     private var runtime: GeckoRuntime? = null
@@ -77,6 +83,26 @@ object GeckoProvider {
                 context.components.appStore.dispatch(
                     AppAction.CrashActionWrapper(CrashAction.CheckDeferred(crashIDs.toList())),
                 )
+            },
+        )
+
+        geckoRuntime.pictureInPictureDelegate = GeckoPictureInPictureDelegate(
+            onEnterPictureInPicture = { browsingContextId, browsingContextGroupId ->
+                val pipSession = GeckoSession(
+                    GeckoSessionSettings.Builder()
+                        .browsingContextGroupId(browsingContextGroupId)
+                        .build(),
+                )
+                pipSession.open(geckoRuntime)
+                PipSessionHolder.sourceBrowsingContextId = browsingContextId
+                PipSessionHolder.session = pipSession
+                context.startActivity(
+                    Intent(context, PictureInPictureActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            },
+            onExitPictureInPicture = {
+                PipSessionHolder.activeActivity?.get()?.finish()
             },
         )
 

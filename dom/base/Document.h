@@ -1972,7 +1972,11 @@ class Document : public nsINode,
   // It returns ElementReadyCheckResult::eOk if the given element is allowed to
   // go into fullscreen. It is responsive to dispatch "fullscreenerror" event
   // when necessary.
-  ElementReadyCheckResult FullscreenElementReadyCheck(FullscreenRequest&);
+  ElementReadyCheckResult LegacyFullscreenElementReadyCheck(FullscreenRequest&);
+
+  ElementReadyCheckResult FullscreenElementReadyCheck(
+      Element* aElement, Promise* aPromise,
+      FullscreenKeyboardLock aKeyboardLock, dom::CallerType aCallerType);
 
   /**
    * When this is called on content process, this asynchronously requests that

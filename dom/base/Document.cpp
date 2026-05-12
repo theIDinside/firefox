@@ -16628,6 +16628,60 @@ static bool ElementIsRemoteFrame(Element* aElement) {
 }
 
 Document::ElementReadyCheckResult Document::FullscreenElementReadyCheck(
+    Element* aElement, Promise* aPromise, FullscreenKeyboardLock aKeyboardLock,
+    dom::CallerType aCallerType) {
+  MOZ_ASSERT(aElement);
+  Element* fullscreenElement = GetUnretargetedFullscreenElement();
+  if (aElement == fullscreenElement) {
+    return aKeyboardLock == GetFullscreenKeyboardLockStatus()
+               ? ElementReadyCheckResult::eSame
+               : ElementReadyCheckResult::eKeyboardLockOnly;
+  }
+
+  if (!aElement->IsInComposedDoc()) {
+    FullscreenRequest::Reject(this, aElement, aPromise,
+                              "FullscreenDeniedNotInDocument");
+    return ElementReadyCheckResult::eErrorPromiseRejected;
+  }
+
+  if (aElement->IsPopoverOpen()) {
+    FullscreenRequest::Reject(this, aElement, aPromise,
+                              "FullscreenDeniedPopoverOpen");
+    return ElementReadyCheckResult::eErrorPromiseRejected;
+  }
+  if (aElement->OwnerDoc() != this) {
+    FullscreenRequest::Reject(this, aElement, aPromise,
+                              "FullscreenDeniedMovedDocument");
+    return ElementReadyCheckResult::eErrorPromiseRejected;
+  }
+  if (!GetWindow()) {
+    FullscreenRequest::Reject(this, aElement, aPromise,
+                              "FullscreenDeniedLostWindow");
+    return ElementReadyCheckResult::eErrorPromiseRejected;
+  }
+  if (const char* msg = GetFullscreenError(aCallerType)) {
+    FullscreenRequest::Reject(this, aElement, aPromise, msg);
+    return ElementReadyCheckResult::eErrorPromiseRejected;
+  }
+  if (HasFullscreenSubDocument(*this)) {
+    FullscreenRequest::Reject(this, aElement, aPromise,
+                              "FullscreenDeniedSubDocFullScreen");
+    return ElementReadyCheckResult::eErrorPromiseRejected;
+  }
+  if (aElement->IsHTMLElement(nsGkAtoms::dialog)) {
+    FullscreenRequest::Reject(this, aElement, aPromise,
+                              "FullscreenDeniedHTMLDialog");
+    return ElementReadyCheckResult::eErrorPromiseRejected;
+  }
+  if (!nsContentUtils::IsChromeDoc(this) && !IsInFocusedTab(this)) {
+    FullscreenRequest::Reject(this, aElement, aPromise,
+                              "FullscreenDeniedNotFocusedTab");
+    return ElementReadyCheckResult::eErrorPromiseRejected;
+  }
+  return ElementReadyCheckResult::eOk;
+}
+
+Document::ElementReadyCheckResult Document::LegacyFullscreenElementReadyCheck(
     FullscreenRequest& aRequest) {
   Element* elem = aRequest.Element();
   // Strictly speaking, this isn't part of the fullscreen element ready
@@ -16659,45 +16713,13 @@ Document::ElementReadyCheckResult Document::FullscreenElementReadyCheck(
     }
 
     // Parent process need not dispatch kblock event, it's already set.
-    return (aRequest.mFullscreenKeyboardLock ==
-                GetFullscreenKeyboardLockStatus() ||
-            XRE_IsParentProcess())
-               ? ElementReadyCheckResult::eSame
-               : ElementReadyCheckResult::eKeyboardLockOnly;
+    if (XRE_IsParentProcess()) {
+      return ElementReadyCheckResult::eSame;
+    }
   }
-  if (!elem->IsInComposedDoc()) {
-    aRequest.Reject("FullscreenDeniedNotInDocument");
-    return ElementReadyCheckResult::eErrorPromiseRejected;
-  }
-  if (elem->IsPopoverOpen()) {
-    aRequest.Reject("FullscreenDeniedPopoverOpen");
-    return ElementReadyCheckResult::eErrorPromiseRejected;
-  }
-  if (elem->OwnerDoc() != this) {
-    aRequest.Reject("FullscreenDeniedMovedDocument");
-    return ElementReadyCheckResult::eErrorPromiseRejected;
-  }
-  if (!GetWindow()) {
-    aRequest.Reject("FullscreenDeniedLostWindow");
-    return ElementReadyCheckResult::eErrorPromiseRejected;
-  }
-  if (const char* msg = GetFullscreenError(aRequest.mCallerType)) {
-    aRequest.Reject(msg);
-    return ElementReadyCheckResult::eErrorPromiseRejected;
-  }
-  if (HasFullscreenSubDocument(*this)) {
-    aRequest.Reject("FullscreenDeniedSubDocFullScreen");
-    return ElementReadyCheckResult::eErrorPromiseRejected;
-  }
-  if (elem->IsHTMLElement(nsGkAtoms::dialog)) {
-    aRequest.Reject("FullscreenDeniedHTMLDialog");
-    return ElementReadyCheckResult::eErrorPromiseRejected;
-  }
-  if (!nsContentUtils::IsChromeDoc(this) && !IsInFocusedTab(this)) {
-    aRequest.Reject("FullscreenDeniedNotFocusedTab");
-    return ElementReadyCheckResult::eErrorPromiseRejected;
-  }
-  return ElementReadyCheckResult::eOk;
+  return FullscreenElementReadyCheck(elem, aRequest.GetPromise(),
+                                     aRequest.mFullscreenKeyboardLock,
+                                     aRequest.mCallerType);
 }
 
 static nsCOMPtr<nsPIDOMWindowOuter> GetRootWindow(Document* aDoc) {
@@ -16797,7 +16819,7 @@ void Document::RequestFullscreenInContentProcess(
 
   // We don't need to check element ready before this point, because
   // if we called ApplyFullscreen, it would check that for us.
-  switch (FullscreenElementReadyCheck(*aRequest)) {
+  switch (LegacyFullscreenElementReadyCheck(*aRequest)) {
     case ElementReadyCheckResult::eSame:
       aRequest->MayResolvePromise();
       [[fallthrough]];
@@ -16866,7 +16888,7 @@ void Document::RequestFullscreenInParentProcess(
   }
   // We don't need to check element ready before this point, because
   // if we called ApplyFullscreen, it would check that for us.
-  switch (FullscreenElementReadyCheck(*aRequest)) {
+  switch (LegacyFullscreenElementReadyCheck(*aRequest)) {
     case ElementReadyCheckResult::eSame:
       aRequest->MayResolvePromise();
       [[fallthrough]];
@@ -16938,7 +16960,7 @@ MOZ_CAN_RUN_SCRIPT_BOUNDARY
 bool Document::ApplyFullscreen(UniquePtr<FullscreenRequest> aRequest) {
   Element* elem = aRequest->Element();
 
-  switch (FullscreenElementReadyCheck(*aRequest)) {
+  switch (LegacyFullscreenElementReadyCheck(*aRequest)) {
     case ElementReadyCheckResult::eOk:
       break;
     case ElementReadyCheckResult::eKeyboardLockOnly:

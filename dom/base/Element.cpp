@@ -91,6 +91,7 @@
 #include "mozilla/dom/Flex.h"
 #include "mozilla/dom/FragmentOrElement.h"
 #include "mozilla/dom/FromParser.h"
+#include "mozilla/dom/FullscreenService.h"
 #include "mozilla/dom/Grid.h"
 #include "mozilla/dom/HTMLDivElement.h"
 #include "mozilla/dom/HTMLElement.h"
@@ -4774,22 +4775,23 @@ already_AddRefed<Promise> Element::RequestFullscreen(
     OwnerDoc()->SetUseCounter(eUseCounter_custom_RequestedKeyboardLock);
   }
 
-  auto request =
-      FullscreenRequest::Create(this, aOptions.mKeyboardLock, aCallerType, aRv);
-  RefPtr<Promise> promise = request->GetPromise();
-
-  // Only grant fullscreen requests if this is called from inside a trusted
-  // event handler (i.e. inside an event handler for a user initiated event).
-  // This stops the fullscreen from being abused similar to the popups of old,
-  // and it also makes it harder for bad guys' script to go fullscreen and
-  // spoof the browser chrome/window and phish logins etc.
-  // Note that requests for fullscreen inside a web app's origin are exempt
-  // from this restriction.
+  RefPtr<Promise> promise = Promise::Create(GetRelevantGlobal(), aRv);
   if (const char* error = GetFullscreenError(aCallerType, OwnerDoc())) {
-    request->Reject(error);
+    FullscreenRequest::Reject(OwnerDoc(), this, promise, error);
   } else {
+    MOZ_ASSERT(!FullscreenService::Enabled());
+    auto request = FullscreenRequest::Create(this, aOptions.mKeyboardLock,
+                                             promise, aCallerType, aRv);
+    // Only grant fullscreen requests if this is called from inside a trusted
+    // event handler (i.e. inside an event handler for a user initiated event).
+    // This stops the fullscreen from being abused similar to the popups of old,
+    // and it also makes it harder for bad guys' script to go fullscreen and
+    // spoof the browser chrome/window and phish logins etc.
+    // Note that requests for fullscreen inside a web app's origin are exempt
+    // from this restriction.
     OwnerDoc()->RequestFullscreen(std::move(request));
   }
+
   return promise.forget();
 }
 

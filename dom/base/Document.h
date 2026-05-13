@@ -1994,6 +1994,8 @@ class Document : public nsINode,
   void RequestFullscreen(UniquePtr<FullscreenRequest> aRequest,
                          bool aApplyFullscreenDirectly = false);
 
+  MOZ_CAN_RUN_SCRIPT_BOUNDARY void ApplyFullscreen(Element* aElement);
+
  private:
   void RequestFullscreenInContentProcess(UniquePtr<FullscreenRequest> aRequest,
                                          bool aApplyFullscreenDirectly);

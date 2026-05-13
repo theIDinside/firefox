@@ -16956,32 +16956,13 @@ bool Document::HasPendingFullscreenRequests() {
   return !iter.AtEnd();
 }
 
-MOZ_CAN_RUN_SCRIPT_BOUNDARY
-bool Document::ApplyFullscreen(UniquePtr<FullscreenRequest> aRequest) {
-  Element* elem = aRequest->Element();
-
-  switch (LegacyFullscreenElementReadyCheck(*aRequest)) {
-    case ElementReadyCheckResult::eOk:
-      break;
-    case ElementReadyCheckResult::eKeyboardLockOnly:
-      SetKeyboardLockStatusAndMaybeDispatchEvent(this, *aRequest);
-      aRequest->MayResolvePromise();
-      return true;
-    case ElementReadyCheckResult::eSame:
-      aRequest->MayResolvePromise();
-      [[fallthrough]];
-    case ElementReadyCheckResult::eErrorPromiseRejected:
-      return false;
-  }
-
-  RefPtr<Document> doc = aRequest->Document();
+MOZ_CAN_RUN_SCRIPT_BOUNDARY void Document::ApplyFullscreen(Element* aElement) {
+  MOZ_ASSERT(aElement);
+  RefPtr<Document> doc = this;
   // https://github.com/whatwg/html/pull/12345
-  RefPtr<Element> hideUntil = elem->GetTopmostPopoverAncestor(nullptr, false);
+  RefPtr<Element> hideUntil =
+      aElement->GetTopmostPopoverAncestor(nullptr, false);
   doc->HidePopoversUntil(hideUntil, false, true);
-
-  // Stash a reference to any existing fullscreen doc, we'll use this later
-  // to detect if the origin which is fullscreen has changed.
-  nsCOMPtr<Document> previousFullscreenDoc = GetFullscreenLeaf(this);
 
   // Stores a list of documents which we must dispatch "fullscreenchange"
   // too. We're required by the spec to dispatch the events in root-to-leaf
@@ -16999,9 +16980,9 @@ bool Document::ApplyFullscreen(UniquePtr<FullscreenRequest> aRequest) {
   // Set the fullscreen element. This sets the fullscreen style on the
   // element, and the fullscreen-ancestor styles on ancestors of the element
   // in this document.
-  SetFullscreenElement(*elem);
+  SetFullscreenElement(*aElement);
   // Set the iframe fullscreen flag.
-  if (auto* iframe = HTMLIFrameElement::FromNode(elem)) {
+  if (auto* iframe = HTMLIFrameElement::FromNode(aElement)) {
     iframe->SetFullscreenFlag(true);
   }
   changed.AppendElement(this);
@@ -17059,6 +17040,36 @@ bool Document::ApplyFullscreen(UniquePtr<FullscreenRequest> aRequest) {
 
   FullscreenRoots::Add(this);
 
+  // Dispatch "fullscreenchange" events. Note that the loop order is
+  // reversed so that events are dispatched in the tree order as
+  // indicated in the spec.
+  for (Document* d : Reversed(changed)) {
+    DispatchFullscreenChange(*d, d->GetUnretargetedFullscreenElement());
+  }
+}
+
+MOZ_CAN_RUN_SCRIPT_BOUNDARY
+bool Document::ApplyFullscreen(UniquePtr<FullscreenRequest> aRequest) {
+  switch (LegacyFullscreenElementReadyCheck(*aRequest)) {
+    case ElementReadyCheckResult::eOk:
+      break;
+    case ElementReadyCheckResult::eKeyboardLockOnly:
+      SetKeyboardLockStatusAndMaybeDispatchEvent(this, *aRequest);
+      aRequest->MayResolvePromise();
+      return true;
+    case ElementReadyCheckResult::eSame:
+      aRequest->MayResolvePromise();
+      [[fallthrough]];
+    case ElementReadyCheckResult::eErrorPromiseRejected:
+      return false;
+  }
+
+  // Stash a reference to any existing fullscreen doc, we'll use this later
+  // to detect if the origin which is fullscreen has changed.
+  nsCOMPtr<Document> previousFullscreenDoc = GetFullscreenLeaf(this);
+
+  ApplyFullscreen(aRequest->Element());
+
   SetKeyboardLockStatusAndMaybeDispatchEvent(this, *aRequest);
 
   // If it is the first entry of the fullscreen, trigger an event so
@@ -17073,9 +17084,10 @@ bool Document::ApplyFullscreen(UniquePtr<FullscreenRequest> aRequest) {
   if (!aRequest->GetPromise() || !previousFullscreenDoc) {
     MOZ_ASSERT(
         (previousFullscreenDoc &&
-         ElementIsRemoteFrame(child->GetUnretargetedFullscreenElement())) ||
+         ElementIsRemoteFrame(
+             GetFullscreenLeaf(this)->GetUnretargetedFullscreenElement())) ||
         !previousFullscreenDoc);
-    PropagateFullscreenRequest(this, elem);
+    PropagateFullscreenRequest(this, aRequest->Element());
   }
 
   // The origin which is fullscreen gets changed. Trigger an event so
@@ -17090,12 +17102,6 @@ bool Document::ApplyFullscreen(UniquePtr<FullscreenRequest> aRequest) {
     DispatchFullscreenNewOriginEvent(this);
   }
 
-  // Dispatch "fullscreenchange" events. Note that the loop order is
-  // reversed so that events are dispatched in the tree order as
-  // indicated in the spec.
-  for (Document* d : Reversed(changed)) {
-    DispatchFullscreenChange(*d, d->GetUnretargetedFullscreenElement());
-  }
   aRequest->MayResolvePromise();
   return true;
 }

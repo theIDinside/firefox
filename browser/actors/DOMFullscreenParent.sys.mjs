@@ -34,10 +34,7 @@ export class DOMFullscreenParent extends JSWindowActorParent {
     // doesn't message to child, and we've exit the fullscreen, there won't be
     // DOMFullscreen:Painted message from child and it is possible that no more
     // paint would be triggered, so just notify fullscreen-painted observer.
-    if (
-      !aWindow.FullScreen.cleanupDomFullscreen(this) &&
-      !aWindow.document.fullscreen
-    ) {
+    if (!this._cleanupDomFullscreen(aWindow) && !aWindow.document.fullscreen) {
       Services.obs.notifyObservers(aWindow, "fullscreen-painted");
     }
   }
@@ -51,6 +48,201 @@ export class DOMFullscreenParent extends JSWindowActorParent {
     this.cleanupDomFullscreen(aWindow);
     if (this.requestOrigin == this && aWindow.document.fullscreen) {
       aWindow.windowUtils.remoteFrameFullscreenReverted();
+    }
+  }
+
+  /**
+   * Clean up full screen, starting from the request origin's first ancestor
+   * frame that is OOP.
+   *
+   * If there are OOP ancestor frames, we notify the first of those and then bail to
+   * be called again in that process when it has dealt with the change. This is
+   * repeated until all ancestor processes have been updated. Once that has happened
+   * we remove our handlers and attributes and notify the request origin to complete
+   * the cleanup.
+   */
+  _cleanupDomFullscreen(aWindow) {
+    let needToWaitForChildExit = false;
+    // Use the message recipient cached in the actor if possible, especially for
+    // the case that actor is destroyed, which we are unable to find it by
+    // walking up the browsing context tree.
+    let [target, inProcessBC] = this._getNextMsgRecipientActor(
+      true /* aUseCache */
+    );
+    if (target) {
+      needToWaitForChildExit = true;
+      // Record that the actor is waiting for its child to exit fullscreen so
+      // that if it dies we can continue cleanup.
+      target.waitingForChildExitFullscreen = true;
+      target.sendAsyncMessage("DOMFullscreen:CleanUp", {
+        remoteFrameBC: inProcessBC,
+      });
+      if (inProcessBC) {
+        return needToWaitForChildExit;
+      }
+    }
+
+    aWindow.FullScreen.cleanupDomFullscreen();
+
+    return needToWaitForChildExit;
+  }
+
+  /**
+   * Search for the first ancestor of aActor that lives in a different process.
+   * If found, that ancestor actor and the browsing context for its child which
+   * was in process are returned. Otherwise [request origin, null].
+   *
+   * @param {bool} aUseCache
+   *        Use the recipient cached in the aActor if available.
+   *
+   * @return {[JSWindowActorParent, BrowsingContext]}
+   *         The parent actor which should be sent the next msg and the
+   *         in process browsing context which is its child. Will be
+   *         [null, null] if there is no OOP parent actor and request origin
+   *         is unset. [null, null] is also returned if the intended actor or
+   *         the calling actor has been destroyed or its associated
+   *         WindowContext is in BFCache.
+   */
+  _getNextMsgRecipientActor(aUseCache) {
+    // Walk up the cached nextMsgRecipient to find the next available actor if
+    // any.
+    if (aUseCache && this.nextMsgRecipient) {
+      let nextMsgRecipient = this.nextMsgRecipient;
+      while (nextMsgRecipient) {
+        let [actor] = nextMsgRecipient;
+        if (
+          !actor.hasBeenDestroyed() &&
+          actor.windowContext &&
+          !actor.windowContext.isInBFCache
+        ) {
+          return nextMsgRecipient;
+        }
+        nextMsgRecipient = actor.nextMsgRecipient;
+      }
+    }
+
+    if (this.hasBeenDestroyed()) {
+      return [null, null];
+    }
+
+    let childBC = this.browsingContext;
+    let parentBC = childBC.parent;
+
+    // Walk up the browsing context tree from aActor's browsing context
+    // to find the first ancestor browsing context that's in a different process.
+    while (parentBC) {
+      if (!childBC.currentWindowGlobal || !parentBC.currentWindowGlobal) {
+        break;
+      }
+      let childPid = childBC.currentWindowGlobal.osPid;
+      let parentPid = parentBC.currentWindowGlobal.osPid;
+
+      if (childPid == parentPid) {
+        childBC = parentBC;
+        parentBC = childBC.parent;
+      } else {
+        break;
+      }
+    }
+
+    let target = null;
+    let inProcessBC = null;
+
+    if (parentBC && parentBC.currentWindowGlobal) {
+      target = parentBC.currentWindowGlobal.getActor("DOMFullscreen");
+      inProcessBC = childBC;
+      this.nextMsgRecipient = [target, inProcessBC];
+    } else {
+      target = this.requestOrigin;
+    }
+
+    if (
+      !target ||
+      target.hasBeenDestroyed() ||
+      target.windowContext?.isInBFCache
+    ) {
+      return [null, null];
+    }
+    return [target, inProcessBC];
+  }
+
+  enterDomFullscreen(aWindow, aBrowser) {
+    if (!aWindow.document.fullscreenElement) {
+      this.requestOrigin = null;
+      return;
+    }
+
+    // If it is a remote browser, send a message to ask the content
+    // to enter fullscreen state. We don't need to do so if it is an
+    // in-process browser, since all related document should have
+    // entered fullscreen state at this point.
+    // Additionally, in Fission world, we may need to notify the
+    // frames in the middle (content frames that embbed the oop iframe where
+    // the element requesting fullscreen lives) to enter fullscreen
+    // first.
+    // This should be done before the active tab check below to ensure
+    // that the content document handles the pending request. Doing so
+    // before the check is fine since we also check the activeness of
+    // the requesting document in content-side handling code.
+    if (aWindow.FullScreen._isRemoteBrowser(aBrowser)) {
+      // The cached message recipient in actor is used for fullscreen state
+      // cleanup, we should not use it while entering fullscreen.
+      let [targetActor, inProcessBC] = this._getNextMsgRecipientActor(
+        false /* aUseCache */
+      );
+      if (!targetActor) {
+        // If there is no appropriate actor to send the message we have
+        // no way to complete the transition and should abort by exiting
+        // fullscreen.
+        this._abortEnterFullscreen(aWindow);
+        return;
+      }
+      // Record that the actor is waiting for its child to enter
+      // fullscreen so that if it dies we can abort.
+      targetActor.waitingForChildEnterFullscreen = true;
+      targetActor.sendAsyncMessage("DOMFullscreen:Entered", {
+        remoteFrameBC: inProcessBC,
+      });
+
+      if (inProcessBC) {
+        // We aren't messaging the request origin yet, skip this time.
+        return;
+      }
+    }
+
+    // If we've received a fullscreen notification, we have to ensure that the
+    // element that's requesting fullscreen belongs to the browser that's currently
+    // active. If not, we exit fullscreen since the "full-screen document" isn't
+    // actually visible now.
+    if (
+      !aBrowser ||
+      aWindow.gBrowser.selectedBrowser != aBrowser ||
+      // The top-level window has lost focus since the request to enter
+      // full-screen was made. Cancel full-screen.
+      Services.focus.activeWindow != aWindow
+    ) {
+      this._abortEnterFullscreen(aWindow);
+      return;
+    }
+
+    aWindow.FullScreen.onEnteredDomFullscreen();
+  }
+
+  _abortEnterFullscreen(aWindow) {
+    // This function is called synchronously in fullscreen change, so
+    // we have to avoid calling exitFullscreen synchronously here.
+    //
+    // This could reject if we're not currently in fullscreen
+    // so just ignore rejection.
+    aWindow.setTimeout(
+      () => aWindow.document.exitFullscreen().catch(() => {}),
+      0
+    );
+    if (this.timerId) {
+      // Cancel the stopwatch for any fullscreen change to avoid
+      // errors if it is started again.
+      Glean.fullscreen.change.cancel(this.timerId);
+      this.timerId = null;
     }
   }
 
@@ -163,7 +355,7 @@ export class DOMFullscreenParent extends JSWindowActorParent {
         this.manager.fullscreen = true;
         this.nextMsgRecipient = null;
         this.waitingForChildEnterFullscreen = false;
-        window.FullScreen.enterDomFullscreen(browser, this);
+        this.enterDomFullscreen(window, browser);
         this.updateFullscreenWindowReference(window);
         break;
       }
@@ -250,7 +442,7 @@ export class DOMFullscreenParent extends JSWindowActorParent {
         }
 
         this.timerId = Glean.fullscreen.change.start();
-        window.FullScreen.enterDomFullscreen(browser, this);
+        this.enterDomFullscreen(window, browser);
         this.updateFullscreenWindowReference(window);
 
         if (!this.hasBeenDestroyed() && this.requestOrigin) {

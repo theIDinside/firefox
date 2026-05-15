@@ -2093,6 +2093,16 @@ class Document : public nsINode,
   void RemoteFrameFullscreenReverted();
 
   /**
+   * Walks the sub tree to collect documents to unfullscreen. Writes top-most
+   * fullscreen element of each document into aResult.
+   * https://fullscreen.spec.whatwg.org/#collect-documents-to-unfullscreen
+   */
+  void CollectDocumentsToUnfullscreen(AutoTArray<Element*, 16>& aResult);
+
+  void RestoreFullscreenStateForCollectedDocuments(
+      AutoTArray<Element*, 16>& aResult);
+
+  /**
    * Restores the previous fullscreen element to fullscreen status. If there
    * is no former fullscreen element, this exits fullscreen, moving the
    * top-level browser window out of fullscreen mode.

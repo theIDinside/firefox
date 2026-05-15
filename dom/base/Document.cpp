@@ -181,6 +181,7 @@
 #include "mozilla/dom/FontFaceSet.h"
 #include "mozilla/dom/FragmentDirective.h"
 #include "mozilla/dom/FromParser.h"
+#include "mozilla/dom/FullscreenService.h"
 #include "mozilla/dom/HTMLAllCollection.h"
 #include "mozilla/dom/HTMLBodyElement.h"
 #include "mozilla/dom/HTMLCollectionBinding.h"
@@ -15514,8 +15515,8 @@ MOZ_CAN_RUN_SCRIPT void Document::ProcessCloseRequest() {
 }
 
 already_AddRefed<Promise> Document::ExitFullscreen(ErrorResult& aRv) {
-  UniquePtr<FullscreenExit> exit = FullscreenExit::Create(this, aRv);
-  RefPtr<Promise> promise = exit->GetPromise();
+  RefPtr<Promise> promise = Promise::Create(GetRelevantGlobal(), aRv);
+  UniquePtr<FullscreenExit> exit = FullscreenExit::Create(this, promise);
   RestorePreviousFullscreenState(std::move(exit));
   return promise.forget();
 }
@@ -15658,6 +15659,11 @@ void Document::ExitFullscreenInDocTree(Document* aMaybeNotARootDoc) {
   // Resolve all promises which waiting for exit fullscreen.
   PendingFullscreenChangeList::Iterator<FullscreenExit> iter(
       aMaybeNotARootDoc, PendingFullscreenChangeList::eDocumentsWithSameRoot);
+
+  // If the FS Service is enabled, we should never have any entries in
+  // PendingFullscreenChangeList
+  MOZ_ASSERT_IF(FullscreenService::Enabled(), iter.AtEnd());
+
   while (!iter.AtEnd()) {
     UniquePtr<FullscreenExit> exit = iter.TakeAndNext();
     exit->MayResolvePromise();
@@ -15702,8 +15708,10 @@ void Document::ExitFullscreenInDocTree(Document* aMaybeNotARootDoc) {
   // Move the top-level window out of fullscreen mode.
   FullscreenRoots::Remove(root);
 
-  nsContentUtils::AddScriptRunner(
-      MakeAndAddRef<ExitFullscreenScriptRunnable>(root, fullscreenLeaf));
+  if (!FullscreenService::Enabled()) {
+    nsContentUtils::AddScriptRunner(
+        MakeAndAddRef<ExitFullscreenScriptRunnable>(root, fullscreenLeaf));
+  }
 }
 
 static void DispatchFullscreenNewOriginEvent(Document* aDoc) {
@@ -15738,21 +15746,9 @@ static void DispatchFullscreenUpdateKeyboardLockEvent(Document* aDoc) {
       }));
 }
 
-void Document::RestorePreviousFullscreenState(UniquePtr<FullscreenExit> aExit) {
-  NS_ASSERTION(!Fullscreen() || !FullscreenRoots::IsEmpty(),
-               "Should have at least 1 fullscreen root when fullscreen!");
-
-  if (!GetWindow()) {
-    aExit->MayRejectPromise("No active window");
-    return;
-  }
-  if (!Fullscreen() || FullscreenRoots::IsEmpty()) {
-    aExit->MayRejectPromise("Not in fullscreen mode");
-    return;
-  }
-
+void Document::CollectDocumentsToUnfullscreen(
+    AutoTArray<Element*, 16>& aResult) {
   nsCOMPtr<Document> fullScreenDoc = GetFullscreenLeaf(this);
-  AutoTArray<Element*, 8> exitElements;
 
   Document* doc = fullScreenDoc;
   // Collect all subdocuments.
@@ -15761,7 +15757,7 @@ void Document::RestorePreviousFullscreenState(UniquePtr<FullscreenExit> aExit) {
     MOZ_ASSERT(fsElement,
                "Parent document of "
                "a fullscreen document without fullscreen element?");
-    exitElements.AppendElement(fsElement);
+    aResult.AppendElement(fsElement);
   }
   MOZ_ASSERT(doc == this, "Must have reached this doc");
   // Collect all ancestor documents which we are going to change.
@@ -15778,30 +15774,24 @@ void Document::RestorePreviousFullscreenState(UniquePtr<FullscreenExit> aExit) {
         }
       }
     }
-    exitElements.AppendElement(fsElement);
+    aResult.AppendElement(fsElement);
     if (doc->CountFullscreenElements() > 1) {
       break;
     }
   }
+}
 
-  Document* lastDoc = exitElements.LastElement()->OwnerDoc();
+void Document::RestoreFullscreenStateForCollectedDocuments(
+    AutoTArray<Element*, 16>& aExitElements) {
+  Document* lastDoc = aExitElements.LastElement()->OwnerDoc();
   size_t fullscreenCount = lastDoc->CountFullscreenElements();
-  if (!lastDoc->GetInProcessParentDocument() && fullscreenCount == 1) {
-    // If we are fully exiting fullscreen, don't touch anything here,
-    // just wait for the window to get out from fullscreen first.
-    PendingFullscreenChangeList::Add(std::move(aExit));
-    AskWindowToExitFullscreen(this);
-    return;
-  }
-
-  FullscreenPaintBarrier::ArmForDocument(fullScreenDoc, /* aIsEnter = */ false);
 
   // If fullscreen mode is updated the pointer should be unlocked
   PointerLockManager::Unlock("Document::RestorePreviousFullscreenState");
   // All documents listed in the array except the last one are going to
   // completely exit from the fullscreen state.
-  for (auto i : IntegerRange(exitElements.Length() - 1)) {
-    exitElements[i]->OwnerDoc()->CleanupFullscreenState();
+  for (auto i : IntegerRange(aExitElements.Length() - 1)) {
+    aExitElements[i]->OwnerDoc()->CleanupFullscreenState();
   }
   // The last document will either rollback one fullscreen element, or
   // completely exit from the fullscreen state as well.
@@ -15818,10 +15808,44 @@ void Document::RestorePreviousFullscreenState(UniquePtr<FullscreenExit> aExit) {
   // Dispatch the fullscreenchange event to all document listed. Note
   // that the loop order is reversed so that events are dispatched in
   // the tree order as indicated in the spec.
-  for (Element* e : Reversed(exitElements)) {
+  for (Element* e : Reversed(aExitElements)) {
     DispatchFullscreenChange(*e->OwnerDoc(), e);
   }
+}
+
+void Document::RestorePreviousFullscreenState(UniquePtr<FullscreenExit> aExit) {
+  NS_ASSERTION(!Fullscreen() || !FullscreenRoots::IsEmpty(),
+               "Should have at least 1 fullscreen root when fullscreen!");
+
+  if (!GetWindow()) {
+    aExit->MayRejectPromise("No active window");
+    return;
+  }
+  if (!Fullscreen() || FullscreenRoots::IsEmpty()) {
+    aExit->MayRejectPromise("Not in fullscreen mode");
+    return;
+  }
+
+  AutoTArray<Element*, 16> exitElements;
+  CollectDocumentsToUnfullscreen(exitElements);
+
+  Document* lastDoc = exitElements.LastElement()->OwnerDoc();
+  size_t fullscreenCount = lastDoc->CountFullscreenElements();
+  if (!lastDoc->GetInProcessParentDocument() && fullscreenCount == 1) {
+    // If we are fully exiting fullscreen, don't touch anything here,
+    // just wait for the window to get out from fullscreen first.
+    PendingFullscreenChangeList::Add(std::move(aExit));
+    AskWindowToExitFullscreen(this);
+    return;
+  }
+
+  nsCOMPtr<Document> fullScreenDoc = GetFullscreenLeaf(this);
+  FullscreenPaintBarrier::ArmForDocument(fullScreenDoc, /* aIsEnter = */ false);
+  RestoreFullscreenStateForCollectedDocuments(exitElements);
+
   aExit->MayResolvePromise();
+
+  Document* newFullscreenDoc = GetFullscreenLeaf(this);
 
   MOZ_ASSERT(newFullscreenDoc,
              "If we were going to exit from fullscreen on "

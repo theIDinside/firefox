@@ -161,9 +161,8 @@ class FullscreenExit : public FullscreenChange {
   static const ChangeType kType = eExit;
 
   static UniquePtr<FullscreenExit> Create(dom::Document* aDoc,
-                                          ErrorResult& aRv) {
-    RefPtr<Promise> promise = Promise::Create(aDoc->GetRelevantGlobal(), aRv);
-    return WrapUnique(new FullscreenExit(aDoc, promise));
+                                          Promise* aPromise) {
+    return WrapUnique(new FullscreenExit(aDoc, aPromise));
   }
 
   static UniquePtr<FullscreenExit> CreateForRemote(dom::Document* aDoc) {

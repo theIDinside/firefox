@@ -17,6 +17,30 @@ export class DOMFullscreenParent extends JSWindowActorParent {
   //       browser-fullScreenAndPointerLock.js into the actor
   nextMsgRecipient = null;
 
+  actorCreated() {
+    // JSWindowActorParent is a C++ XPCOM wrapper that doesn't QI to
+    // nsIObserver, so we register a plain function instead of `this`.
+    this._paintedObserver = (aSubject, aTopic) => {
+      if (aTopic !== "fullscreen-painted") {
+        return;
+      }
+      if (!this.timerId) {
+        return;
+      }
+      if (this.hasBeenDestroyed()) {
+        return;
+      }
+      const chromeInner =
+        this.browsingContext.top?.embedderElement?.documentGlobal;
+      if (aSubject !== chromeInner) {
+        return;
+      }
+      Glean.fullscreen.change.stopAndAccumulate(this.timerId);
+      this.timerId = null;
+    };
+    Services.obs.addObserver(this._paintedObserver, "fullscreen-painted");
+  }
+
   updateFullscreenWindowReference(aWindow) {
     if (aWindow.document.documentElement.hasAttribute("inDOMFullscreen")) {
       this._fullscreenWindow = aWindow;
@@ -248,6 +272,10 @@ export class DOMFullscreenParent extends JSWindowActorParent {
 
   didDestroy() {
     this._didDestroy = true;
+    if (this._paintedObserver) {
+      Services.obs.removeObserver(this._paintedObserver, "fullscreen-painted");
+      this._paintedObserver = null;
+    }
 
     let window = this._fullscreenWindow;
     if (!window) {
@@ -373,11 +401,11 @@ export class DOMFullscreenParent extends JSWindowActorParent {
         break;
       }
       case "DOMFullscreen:Painted": {
+        // Cleanup-choreography ack from the child after a CleanUp request.
+        // The actual "fullscreen-painted" observer notification is fired
+        // independently by FullscreenPaintBarrier in the content process,
+        // not by this message; see DOMFullscreenParent.observe.
         this.waitingForChildExitFullscreen = false;
-        Services.obs.notifyObservers(window, "fullscreen-painted");
-        this.sendAsyncMessage("DOMFullscreen:Painted", {});
-        Glean.fullscreen.change.stopAndAccumulate(this.timerId);
-        this.timerId = null;
         break;
       }
       case "DOMFullscreen:UpdateKeyboardLock": {

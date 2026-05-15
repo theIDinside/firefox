@@ -21,6 +21,7 @@
 #include "Attr.h"
 #include "ErrorList.h"
 #include "ExpandedPrincipal.h"
+#include "FullscreenPaintBarrier.h"
 #include "MainThreadUtils.h"
 #include "MobileViewportManager.h"
 #include "NSSErrorsService.h"
@@ -15681,6 +15682,17 @@ void Document::ExitFullscreenInDocTree(Document* aMaybeNotARootDoc) {
   // reset the fullscreen state below.
   Document* fullscreenLeaf = GetFullscreenLeaf(root);
 
+  // Codification of "fullscreen-painted" is that it should be a side effect of
+  // a seen MozAfterPaint event in the content process. There are tests that
+  // rely on "fallback notification", which is why the JSWA implementation sends
+  // "fullscreen-painted" on its own some times, during clean up of DOM
+  // fullscreen. If something wants to arm the FullscreenPaintBarrier in the
+  // parent process it has to do so explicitly themselves.
+  if (!XRE_IsParentProcess()) {
+    FullscreenPaintBarrier::ArmForDocument(fullscreenLeaf,
+                                           /* aIsEnter = */ false);
+  }
+
   // Walk the tree of fullscreen documents, and reset their fullscreen state.
   ResetFullscreen(*root);
 
@@ -15781,6 +15793,8 @@ void Document::RestorePreviousFullscreenState(UniquePtr<FullscreenExit> aExit) {
     AskWindowToExitFullscreen(this);
     return;
   }
+
+  FullscreenPaintBarrier::ArmForDocument(fullScreenDoc, /* aIsEnter = */ false);
 
   // If fullscreen mode is updated the pointer should be unlocked
   PointerLockManager::Unlock("Document::RestorePreviousFullscreenState");
@@ -17067,6 +17081,11 @@ bool Document::ApplyFullscreen(UniquePtr<FullscreenRequest> aRequest) {
   // Stash a reference to any existing fullscreen doc, we'll use this later
   // to detect if the origin which is fullscreen has changed.
   nsCOMPtr<Document> previousFullscreenDoc = GetFullscreenLeaf(this);
+
+  // We are the leaf content, when it has painted, send notification.
+  if (aRequest->GetPromise()) {
+    FullscreenPaintBarrier::ArmForDocument(this, /* aIsEnter = */ true);
+  }
 
   ApplyFullscreen(aRequest->Element());
 

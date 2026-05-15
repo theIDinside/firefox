@@ -28,37 +28,25 @@ export class DOMFullscreenChild extends JSWindowActorChild {
           }
           this._isNotTheRequestSource = true;
           windowUtils.remoteFrameFullscreenChanged(remoteFrame);
-        } else {
-          this._waitForMozAfterPaint = true;
-          this._lastTransactionId = windowUtils.lastTransactionId;
-          if (
-            !windowUtils.handleFullscreenRequests() &&
-            !this.document.fullscreenElement
-          ) {
-            // If we don't actually have any pending fullscreen request
-            // to handle, neither we have been in fullscreen, tell the
-            // parent to just exit.
-            this.sendAsyncMessage("DOMFullscreen:Exit", {});
-          }
+        } else if (
+          !windowUtils.handleFullscreenRequests() &&
+          !this.document.fullscreenElement
+        ) {
+          // If we don't actually have any pending fullscreen request
+          // to handle, neither we have been in fullscreen, tell the
+          // parent to just exit.
+          this.sendAsyncMessage("DOMFullscreen:Exit", {});
         }
         break;
       }
       case "DOMFullscreen:CleanUp": {
         let isNotTheRequestSource = !!aMessage.data.remoteFrameBC;
-        // If we've exited fullscreen at this point, no need to record
-        // transaction id or call exit fullscreen. This is especially
-        // important for pre-e10s, since in that case, it is possible
-        // that no more paint would be triggered after this point.
         if (this.document.fullscreenElement) {
           this._isNotTheRequestSource = isNotTheRequestSource;
-          // Need to wait for the MozAfterPaint after exiting fullscreen if
-          // this is the request source.
-          this._waitForMozAfterPaint = !this._isNotTheRequestSource;
           // windowUtils could be null if the associated window is not current
           // active window. In this case, document must be in the process of
           // exiting fullscreen, it is okay to not ask it to exit fullscreen.
           if (windowUtils) {
-            this._lastTransactionId = windowUtils.lastTransactionId;
             windowUtils.exitFullscreen();
           }
         } else if (isNotTheRequestSource) {
@@ -66,17 +54,11 @@ export class DOMFullscreenChild extends JSWindowActorChild {
           // Exited to parent as parent is waiting for our reply.
           this.sendAsyncMessage("DOMFullscreen:Exited", {});
         } else {
-          // If we've already exited fullscreen, it is possible that no more
-          // paint would be triggered, so don't wait for MozAfterPaint.
-          // TODO: There might be some way to move this code around a bit to
-          //       make it easier to follow. Somehow handle the "local" case in
-          //       one place and the isNotTheRequestSource case after that.
+          // Already exited fullscreen — ack the cleanup choreography so the
+          // parent clears its waiting flag. The fullscreen-painted observer
+          // notification is fired by FullscreenPaintBarrier in C++, not here.
           this.sendAsyncMessage("DOMFullscreen:Painted", {});
         }
-        break;
-      }
-      case "DOMFullscreen:Painted": {
-        Services.obs.notifyObservers(window, "fullscreen-painted");
         break;
       }
     }
@@ -119,10 +101,12 @@ export class DOMFullscreenChild extends JSWindowActorChild {
           break;
         }
 
-        if (this._waitForMozAfterPaint) {
-          delete this._waitForMozAfterPaint;
-          this._listeningWindow = this.contentWindow.windowRoot;
-          this._listeningWindow.addEventListener("MozAfterPaint", this);
+        // We are the request source. On exit, ack the cleanup choreography
+        // so the parent clears its waitingForChildExitFullscreen flag. The
+        // fullscreen-painted observer notification is fired independently by
+        // FullscreenPaintBarrier in C++.
+        if (aEvent.type === "MozDOMFullscreen:Exited") {
+          this.sendAsyncMessage("DOMFullscreen:Painted", {});
         }
 
         if (!this.document || !this.document.fullscreenElement) {
@@ -137,21 +121,6 @@ export class DOMFullscreenChild extends JSWindowActorChild {
         this.sendAsyncMessage("DOMFullscreen:UpdateKeyboardLock", {
           fullscreenKeyboardLock: aEvent.detail,
         });
-        break;
-      }
-      case "MozAfterPaint": {
-        // Only send Painted signal after we actually finish painting
-        // the transition for the fullscreen change.
-        // Note that this._lastTransactionId is not set when in pre-e10s
-        // mode, so we need to check that explicitly.
-        if (
-          !this._lastTransactionId ||
-          aEvent.transactionId > this._lastTransactionId
-        ) {
-          this._listeningWindow.removeEventListener("MozAfterPaint", this);
-          delete this._listeningWindow;
-          this.sendAsyncMessage("DOMFullscreen:Painted", {});
-        }
         break;
       }
     }

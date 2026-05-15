@@ -3881,6 +3881,38 @@ mozilla::ipc::IPCResult BrowserParent::RecvRemoteIsReadyToHandleInputEvents() {
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult BrowserParent::RecvFullscreenPainted(
+    const bool& aIsEnter) {
+  if (!mFrameElement) {
+    return IPC_OK();
+  }
+  // On exit, only the top-level BrowserParent emits the public
+  // "fullscreen-painted" observer notification. Under Fission, OOP descendant
+  // content processes also fire SendFullscreenPainted for their local
+  // post-toggle paint, but the user-visible "fullscreen has finished
+  // toggling" event corresponds to the topmost embedder's composite. This
+  // matches the JSWA-era exit timing, which waited for the outermost
+  // embedder's MozAfterPaint.
+  if (!aIsEnter) {
+    if (!mBrowsingContext || !mBrowsingContext->IsTop()) {
+      return IPC_OK();
+    }
+  }
+  nsCOMPtr<nsPIDOMWindowOuter> outer = mFrameElement->OwnerDoc()->GetWindow();
+  if (!outer) {
+    return IPC_OK();
+  }
+  nsCOMPtr<nsPIDOMWindowInner> inner = outer->GetCurrentInnerWindow();
+  if (!inner) {
+    return IPC_OK();
+  }
+  if (nsCOMPtr<nsIObserverService> os = services::GetObserverService()) {
+    FULLSCREEN_LOG("Notifying observers of 'fullscreen-painted'");
+    os->NotifyObservers(inner, "fullscreen-painted", nullptr);
+  }
+  return IPC_OK();
+}
+
 PPaymentRequestParent* BrowserParent::AllocPPaymentRequestParent() {
   RefPtr<PaymentRequestParent> actor = new PaymentRequestParent();
   return actor.forget().take();

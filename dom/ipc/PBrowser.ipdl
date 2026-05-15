@@ -593,6 +593,17 @@ parent:
      */
     async RemoteIsReadyToHandleInputEvents();
 
+    /**
+     * Child notifies the parent that the post-fullscreen-toggle paint has
+     * landed in this BrowserChild's process. The parent fires the
+     * "fullscreen-painted" observer notification on the chrome window
+     * hosting this <browser>.
+     *
+     * `aIsEnter` signals if this is for an enter-into or exit-out-of
+     * fullscreen.
+     */
+    async FullscreenPainted(bool aIsEnter);
+
 child:
     /**
      * Parent informs the child of graphical effects that are being applied

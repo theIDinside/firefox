@@ -739,6 +739,8 @@ class BrowserParent final : public PBrowserParent,
 
   mozilla::ipc::IPCResult RecvRemoteIsReadyToHandleInputEvents();
 
+  mozilla::ipc::IPCResult RecvFullscreenPainted(const bool& aIsEnter);
+
   mozilla::ipc::IPCResult RecvSetDimensions(mozilla::DimensionRequest aRequest,
                                             const double& aScale);
 

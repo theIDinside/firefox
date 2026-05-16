@@ -452,10 +452,8 @@ CanonicalBrowsingContext::GetParentProcessWidgetContaining() {
 
 already_AddRefed<nsIBrowserDOMWindow>
 CanonicalBrowsingContext::GetBrowserDOMWindow() {
-  RefPtr<CanonicalBrowsingContext> chromeTop = TopCrossChromeBoundary();
-  nsGlobalWindowOuter* topWin;
-  if ((topWin = nsGlobalWindowOuter::Cast(chromeTop->GetDOMWindow())) &&
-      topWin->IsChromeWindow()) {
+  nsGlobalWindowOuter* topWin = GetTopCrossChromeBoundaryDOMWindow();
+  if (topWin && topWin->IsChromeWindow()) {
     return do_AddRef(topWin->GetBrowserDOMWindow());
   }
   return nullptr;
@@ -496,6 +494,11 @@ Nullable<WindowProxyHolder> CanonicalBrowsingContext::GetTopChromeWindow() {
     return WindowProxyHolder(bc.forget());
   }
   return nullptr;
+}
+
+nsGlobalWindowOuter*
+CanonicalBrowsingContext::GetTopCrossChromeBoundaryDOMWindow() {
+  return nsGlobalWindowOuter::Cast(TopCrossChromeBoundary()->GetDOMWindow());
 }
 
 nsISHistory* CanonicalBrowsingContext::GetSessionHistory() {

@@ -124,6 +124,7 @@ class CanonicalBrowsingContext final : public BrowsingContext {
   CanonicalBrowsingContext* GetParentCrossChromeBoundary();
   CanonicalBrowsingContext* TopCrossChromeBoundary();
   Nullable<WindowProxyHolder> GetTopChromeWindow();
+  nsGlobalWindowOuter* GetTopCrossChromeBoundaryDOMWindow();
 
   nsISHistory* GetSessionHistory();
   SessionHistoryEntry* GetActiveSessionHistoryEntry();

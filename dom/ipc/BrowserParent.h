@@ -871,6 +871,10 @@ class BrowserParent final : public PBrowserParent,
   mozilla::ipc::IPCResult RecvPerformHapticFeedback(
       mozilla::HapticFeedbackType aType);
 
+  RefPtr<BrowserParent::RequestRemoteFrameApplyFullscreenPromise>
+  RequestFullscreenForRemoteFrame(
+      const MaybeDiscardedBrowsingContext& aChildBrowsingContext);
+
  private:
   TabId mTabId;
 

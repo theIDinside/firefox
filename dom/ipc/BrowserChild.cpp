@@ -46,6 +46,7 @@
 #include "mozilla/dom/DataTransfer.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/Event.h"
+#include "mozilla/dom/FullscreenService.h"
 #include "mozilla/dom/ImageDocument.h"
 #include "mozilla/dom/JSWindowActorChild.h"
 #include "mozilla/dom/LoadURIOptionsBinding.h"
@@ -2389,6 +2390,46 @@ BrowserChild::RecvDispatchToDropTargetAndResumeEndDragSession(
   dragSession->DispatchToDropTargetAndResumeEndDragSession(
       widget, mDelayedDropPoint, aShouldDrop, allowedPaths);
   mDelayedDropPoint = {};
+  return IPC_OK();
+}
+
+MOZ_CAN_RUN_SCRIPT_BOUNDARY
+mozilla::ipc::IPCResult BrowserChild::RecvRequestRemoteFrameApplyFullscreen(
+    MaybeDiscardedBrowsingContext aSourceBrowsingContext,
+    RequestRemoteFrameApplyFullscreenResolver&& aResolve) {
+  if (NS_WARN_IF(aSourceBrowsingContext.IsNullOrDiscarded())) {
+    // We simply just skip documents that have disappeared from existence,
+    aResolve(NS_ERROR_ABORT);
+    return IPC_OK();
+  }
+
+  BrowsingContext* browsingContext = aSourceBrowsingContext.get();
+  FULLSCREEN_LOG(
+      "RequestRemoteFrameApplyFullscreen browserChild={}, browsingContext={}",
+      Id(), browsingContext->Id());
+  Element* embedderElement = browsingContext->GetEmbedderElement();
+  if (NS_WARN_IF(!embedderElement)) {
+    aResolve(NS_ERROR_ABORT);
+    return IPC_OK();
+  }
+
+  Document* ownerDoc = embedderElement->OwnerDoc();
+  using Result = Document::ElementReadyCheckResult;
+  const auto check = ownerDoc->FullscreenElementReadyCheck(
+      embedderElement, nullptr, Nothing(), CallerType::NonSystem);
+
+  if (check == Result::eErrorPromiseRejected) {
+    // Force the enter fullscreen request to abort. Does not match spec, but
+    // matches previous IPC architectural behavior. The spec does not account
+    // for OOP iframes.
+    aResolve(NS_ERROR_ABORT);
+    return IPC_OK();
+  }
+
+  if (check == Result::eOk) {
+    ownerDoc->ApplyFullscreen(embedderElement);
+  }
+  aResolve(NS_OK);
   return IPC_OK();
 }
 

@@ -1974,9 +1974,15 @@ class Document : public nsINode,
   // when necessary.
   ElementReadyCheckResult LegacyFullscreenElementReadyCheck(FullscreenRequest&);
 
+  /**
+   * Element ready check as per spec
+   * https://fullscreen.spec.whatwg.org/#fullscreen-element-ready-check, with
+   * some extra steps. The optional aKeyboardLock argument defines if keyboard
+   * lock difference should be reflected in the result.
+   */
   ElementReadyCheckResult FullscreenElementReadyCheck(
       Element* aElement, Promise* aPromise,
-      FullscreenKeyboardLock aKeyboardLock, dom::CallerType aCallerType);
+      Maybe<FullscreenKeyboardLock> aKeyboardLock, dom::CallerType aCallerType);
 
   /**
    * When this is called on content process, this asynchronously requests that

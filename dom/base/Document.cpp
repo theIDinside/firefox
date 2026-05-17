@@ -16666,14 +16666,18 @@ static bool ElementIsRemoteFrame(Element* aElement) {
 }
 
 Document::ElementReadyCheckResult Document::FullscreenElementReadyCheck(
-    Element* aElement, Promise* aPromise, FullscreenKeyboardLock aKeyboardLock,
-    dom::CallerType aCallerType) {
+    Element* aElement, Promise* aPromise,
+    Maybe<FullscreenKeyboardLock> aKeyboardLock, dom::CallerType aCallerType) {
   MOZ_ASSERT(aElement);
   Element* fullscreenElement = GetUnretargetedFullscreenElement();
   if (aElement == fullscreenElement) {
-    return aKeyboardLock == GetFullscreenKeyboardLockStatus()
-               ? ElementReadyCheckResult::eSame
-               : ElementReadyCheckResult::eKeyboardLockOnly;
+    return aKeyboardLock
+        .map([&](auto value) {
+          return value == GetFullscreenKeyboardLockStatus()
+                     ? ElementReadyCheckResult::eSame
+                     : ElementReadyCheckResult::eKeyboardLockOnly;
+        })
+        .valueOr(ElementReadyCheckResult::eSame);
   }
 
   if (!aElement->IsInComposedDoc()) {
@@ -16756,7 +16760,7 @@ Document::ElementReadyCheckResult Document::LegacyFullscreenElementReadyCheck(
     }
   }
   return FullscreenElementReadyCheck(elem, aRequest.GetPromise(),
-                                     aRequest.mFullscreenKeyboardLock,
+                                     Some(aRequest.mFullscreenKeyboardLock),
                                      aRequest.mCallerType);
 }
 

@@ -3382,6 +3382,16 @@ mozilla::ipc::IPCResult BrowserParent::RecvPerformHapticFeedback(
   return IPC_OK();
 }
 
+RefPtr<PBrowserParent::RequestRemoteFrameApplyFullscreenPromise>
+BrowserParent::RequestFullscreenForRemoteFrame(
+    const MaybeDiscardedBrowsingContext& aChildBrowsingContext) {
+  const auto* context = GetBrowsingContext();
+  if (auto* winContext = context->GetCurrentWindowGlobal()) {
+    winContext->SetFullscreen(true);
+  }
+  return SendRequestRemoteFrameApplyFullscreen(aChildBrowsingContext);
+}
+
 /* static */
 BrowserParent* BrowserParent::UpdateFocus() {
   if (!sTopLevelWebFocus) {

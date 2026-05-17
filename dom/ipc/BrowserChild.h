@@ -734,6 +734,11 @@ class BrowserChild final : public nsMessageManagerScriptExecutor,
   mozilla::ipc::IPCResult RecvDispatchToDropTargetAndResumeEndDragSession(
       bool aShouldDrop, nsTHashSet<nsString>&& aAllowedFilesPaths);
 
+  MOZ_CAN_RUN_SCRIPT_BOUNDARY
+  mozilla::ipc::IPCResult RecvRequestRemoteFrameApplyFullscreen(
+      MaybeDiscardedBrowsingContext aSourceBrowsingContext,
+      RequestRemoteFrameApplyFullscreenResolver&& aResolve);
+
   void OnPointerRawUpdateEventListenerAdded(const nsPIDOMWindowInner* aWindow);
   void OnPointerRawUpdateEventListenerRemoved(
       const nsPIDOMWindowInner* aWindow);

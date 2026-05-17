@@ -1121,6 +1121,13 @@ parent:
 
     async PerformHapticFeedback(HapticFeedbackType aType);
 
+child:
+    /**
+     * Fullscreen Service requests remote frame to apply fullscreen.
+     * Remote process will respond with NS_ERROR if it could not service the request.
+     */
+    async RequestRemoteFrameApplyFullscreen(MaybeDiscardedBrowsingContext aChildBrowsingContext) returns (nsresult rv);
+
 /*
  * FIXME: write protocol!
 

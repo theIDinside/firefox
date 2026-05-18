@@ -15813,6 +15813,17 @@ void Document::RestoreFullscreenStateForCollectedDocuments(
   }
 }
 
+void Document::RestorePreviousFullscreenState() {
+  NS_ASSERTION(!Fullscreen() || !FullscreenRoots::IsEmpty(),
+               "Should have at least 1 fullscreen root when fullscreen!");
+
+  nsCOMPtr<Document> fullScreenDoc = GetFullscreenLeaf(this);
+  AutoTArray<Element*, 16> exitElements;
+  CollectDocumentsToUnfullscreen(exitElements);
+  FullscreenPaintBarrier::ArmForDocument(fullScreenDoc, /* aIsEnter = */ false);
+  RestoreFullscreenStateForCollectedDocuments(exitElements);
+}
+
 void Document::RestorePreviousFullscreenState(UniquePtr<FullscreenExit> aExit) {
   NS_ASSERTION(!Fullscreen() || !FullscreenRoots::IsEmpty(),
                "Should have at least 1 fullscreen root when fullscreen!");

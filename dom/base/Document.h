@@ -2109,6 +2109,14 @@ class Document : public nsINode,
       AutoTArray<Element*, 16>& aResult);
 
   /**
+   * Exits fullscreen state by collecting documents to unfullscreen and then
+   * exiting them. Given that the spec is unimplementable and broken; this
+   * function maps to step 12-15 of
+   * https://fullscreen.spec.whatwg.org/#exit-fullscreen
+   */
+  void RestorePreviousFullscreenState();
+
+  /**
    * Restores the previous fullscreen element to fullscreen status. If there
    * is no former fullscreen element, this exits fullscreen, moving the
    * top-level browser window out of fullscreen mode.

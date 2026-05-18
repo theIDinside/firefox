@@ -965,6 +965,22 @@ class nsGlobalWindowOuter final : public mozilla::dom::EventTarget,
   nsresult Dispatch(already_AddRefed<nsIRunnable>&&) const final;
   nsISerialEventTarget* SerialEventTarget() const final;
 
+  using FullscreenRequest = struct FullscreenRequest {
+    FullscreenRequest(FullscreenReason aReason, bool aFullscreen)
+        : mReason(aReason), mFullscreen(aFullscreen) {
+      MOZ_ASSERT(
+          mReason != FullscreenReason::ForForceExitFullscreen || !mFullscreen,
+          "FullscreenReason::ForForceExitFullscreen can only be used with "
+          "exiting fullscreen");
+    }
+    FullscreenReason mReason;
+    bool mFullscreen : 1;
+  };
+
+  const mozilla::Maybe<FullscreenRequest>& InProcessFullscreenRequest() const {
+    return mInProcessFullscreenRequest;
+  }
+
  protected:
   nsresult ProcessWidgetFullscreenRequest(FullscreenReason aReason,
                                           bool aFullscreen);
@@ -979,17 +995,6 @@ class nsGlobalWindowOuter final : public mozilla::dom::EventTarget,
   // fullscreen request is still in-process.
   bool mFullscreenHasChangedDuringProcessing : 1;
 
-  using FullscreenRequest = struct FullscreenRequest {
-    FullscreenRequest(FullscreenReason aReason, bool aFullscreen)
-        : mReason(aReason), mFullscreen(aFullscreen) {
-      MOZ_ASSERT(
-          mReason != FullscreenReason::ForForceExitFullscreen || !mFullscreen,
-          "FullscreenReason::ForForceExitFullscreen can only be used with "
-          "exiting fullscreen");
-    }
-    FullscreenReason mReason;
-    bool mFullscreen : 1;
-  };
   // The current in-process fullscreen request. Nothing if there is no
   // in-process request.
   mozilla::Maybe<FullscreenRequest> mInProcessFullscreenRequest;

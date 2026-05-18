@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "FullscreenManager.h"
 #include "mozilla/Assertions.h"
 #include "mozilla/ScopeExit.h"
 #include "nsDeviceContext.h"
@@ -29,6 +30,7 @@
 #include "mozilla/dom/DocumentInlines.h"
 #include "mozilla/dom/DocumentPictureInPicture.h"
 #include "mozilla/dom/EventTarget.h"
+#include "mozilla/dom/FullscreenService.h"
 #include "mozilla/dom/HTMLIFrameElement.h"
 #include "mozilla/dom/LSObject.h"
 #include "mozilla/dom/LocalStorage.h"
@@ -1393,6 +1395,10 @@ void nsGlobalWindowOuter::Init() {
 
 nsGlobalWindowOuter::~nsGlobalWindowOuter() {
   AssertIsOnMainThread();
+
+  if (FullscreenService::Enabled() && XRE_IsParentProcess()) {
+    FullscreenService::OnWindowOuterDestroyed(mWindowID);
+  }
 
   if (sOuterWindowsById) {
     sOuterWindowsById->Remove(mWindowID);
@@ -3912,8 +3918,14 @@ nsresult nsGlobalWindowOuter::SetFullScreen(bool aFullscreen) {
                                aFullscreen);
 }
 
-static void FinishDOMFullscreenChange(Document* aDoc, bool aInDOMFullscreen) {
-  if (aInDOMFullscreen) {
+static void FinishDOMFullscreenChange(uint64_t aWindowId, Document* aDoc,
+                                      bool aInFullscreen) {
+  if (FullscreenService::Enabled()) {
+    FullscreenService::FullscreenChanged(aWindowId, aDoc, aInFullscreen);
+    return;
+  }
+
+  if (aInFullscreen) {
     // Ask the document to handle any pending DOM fullscreen change.
     if (!Document::HandlePendingFullscreenRequests(aDoc)) {
       // If we don't end up having anything in fullscreen,
@@ -4310,7 +4322,7 @@ nsresult nsGlobalWindowOuter::SetFullscreenInternal(FullscreenReason aReason,
       // If there is a in-process fullscreen request, FinishDOMFullscreenChange
       // will be called when the request is finished.
       if (!mInProcessFullscreenRequest.isSome()) {
-        FinishDOMFullscreenChange(mDoc, false);
+        FinishDOMFullscreenChange(WindowID(), mDoc, false);
       }
       return NS_OK;
     }
@@ -4422,6 +4434,14 @@ void nsGlobalWindowOuter::FinishFullscreenChange(bool aIsFullscreen) {
       // browser fullscreen mode.
       mFullscreen.emplace(FullscreenReason::ForFullscreenAPI);
     }
+    if (FullscreenService::Enabled()) {
+      // If toggling failed, inform Fullscreen manager to start a request if it
+      // waited for transition to complete.
+      if (FullscreenManager* manager =
+              FullscreenService::Get()->GetManager(WindowID())) {
+        manager->StartNextRequest();
+      }
+    }
     return;
   }
 
@@ -4429,7 +4449,7 @@ void nsGlobalWindowOuter::FinishFullscreenChange(bool aIsFullscreen) {
   // of the document before dispatching the "fullscreen" event, so
   // that the chrome can distinguish between browser fullscreen mode
   // and DOM fullscreen.
-  FinishDOMFullscreenChange(mDoc, aIsFullscreen);
+  FinishDOMFullscreenChange(WindowID(), mDoc, aIsFullscreen);
 
   // dispatch a "fullscreen" DOM event so that XUL apps can
   // respond visually if we are kicked into full screen mode

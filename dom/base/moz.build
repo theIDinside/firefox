@@ -378,6 +378,7 @@ UNIFIED_SOURCES += [
     "FormData.cpp",
     "FragmentDirective.cpp",
     "FragmentOrElement.cpp",
+    "FullscreenManager.cpp",
     "FullscreenPaintBarrier.cpp",
     "FullscreenService.cpp",
     "GeneratedImageContent.cpp",

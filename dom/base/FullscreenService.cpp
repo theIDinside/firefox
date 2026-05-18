@@ -24,6 +24,8 @@ NS_IMPL_RELEASE(FullscreenService)
 static mozilla::StaticRefPtr<FullscreenService> gFullscreenService;
 static bool sIsXPCOMShutdown = false;
 
+FullscreenService::~FullscreenService() = default;
+
 FullscreenService::FullscreenService() {
   MOZ_ASSERT(XRE_IsParentProcess());
   FULLSCREEN_LOG("Created fullscreen service");

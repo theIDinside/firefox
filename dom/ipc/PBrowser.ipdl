@@ -113,6 +113,7 @@ using mozilla::NativeKeyBindingsType from "mozilla/widget/WidgetMessageUtils.h";
 using mozilla::StyleImageRendering from "mozilla/ServoStyleConsts.h";
 [MoveOnly] using class mozilla::ipc::BigBuffer from "mozilla/ipc/BigBuffer.h";
 using nsIFilePicker::Mode from "nsIFilePicker.h";
+using mozilla::dom::FullscreenSimpleDoc from "mozilla/dom/FullscreenService.h";
 
 namespace mozilla {
 namespace dom {
@@ -179,6 +180,11 @@ struct PrintPreviewResultInfo
   float? pageWidth;
   // The at-page specified page height or null when no height is provided.
   float? pageHeight;
+};
+
+struct FullscreenDocStatus {
+  MaybeDiscardedBrowsingContext browsingContext;
+  FullscreenSimpleDoc isSimple;
 };
 
 /**
@@ -1122,6 +1128,24 @@ parent:
     async PerformHapticFeedback(HapticFeedbackType aType);
 
 child:
+    /**
+     * Collect docs to unfullscreen in the remote process.
+     * If it has a doc tree in fullscreen with only simple fullscreen documents, returns Some(true),
+     * if any is non-simple Some(false), if none in fullscreen at all, Nothing().
+     */
+    async CollectFullscreenDocsToUnfullscreen() returns (FullscreenDocStatus[] entries);
+
+    /**
+     * Force the document subtree assocated with the browser child out of fullscreen.
+     */
+    async ExitFullscreenFullyForRemoteFrame();
+
+    /**
+     * Exit fullscreen per Fullscreen API https://fullscreen.spec.whatwg.org/#exit-fullscreen
+     * doing steps 12-15.
+     */
+     async ExitFullscreenInRemote(MaybeDiscardedBrowsingContext aContext);
+
     /**
      * Fullscreen Service requests remote frame to apply fullscreen.
      * Remote process will respond with NS_ERROR if it could not service the request.

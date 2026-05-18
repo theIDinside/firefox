@@ -2393,6 +2393,79 @@ BrowserChild::RecvDispatchToDropTargetAndResumeEndDragSession(
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult BrowserChild::RecvExitFullscreenFullyForRemoteFrame() {
+  FULLSCREEN_LOG(
+      "BrowserChild::RecvExitFullscreenFullyForRemoteFrame browserChild={}",
+      Id());
+  if (RefPtr<Document> doc = GetTopLevelDocument()) {
+    Document::ExitFullscreenInDocTree(doc);
+  }
+  return IPC_OK();
+}
+
+static Maybe<bool> IsSimpleFullscreenDoc(Document* aDoc) {
+  if (!aDoc->Fullscreen()) {
+    return Nothing();
+  }
+  if (aDoc->CountFullscreenElements() > 1) {
+    return Some(false);
+  }
+  return Some(true);
+}
+
+mozilla::ipc::IPCResult BrowserChild::RecvCollectFullscreenDocsToUnfullscreen(
+    CollectFullscreenDocsToUnfullscreenResolver&& aResolve) {
+  nsTArray<FullscreenDocStatus> entries;
+
+  BrowsingContext* topBc = GetBrowsingContext();
+  Document* document = topBc ? topBc->GetDocument() : nullptr;
+
+  if (!document) {
+    FULLSCREEN_LOG(
+        "BrowserChild::RecvCollectFullscreenDocsToUnfullscreen no document");
+    aResolve(entries);
+    return IPC_OK();
+  }
+
+  Document* fullscreenLeafDoc = Document::GetFullscreenLeaf(*document);
+  if (!fullscreenLeafDoc) {
+    FULLSCREEN_LOG("No fullscreen leaf");
+    aResolve(entries);
+    return IPC_OK();
+  }
+
+  for (RefPtr<BrowsingContext> bc = fullscreenLeafDoc->GetBrowsingContext(); bc;
+       bc = bc->GetParent()) {
+    Document* doc = bc->GetDocument();
+    if (doc) {
+      const auto isSimple = IsSimpleFullscreenDoc(doc);
+      entries.AppendElement(
+          FullscreenDocStatus{MaybeDiscardedBrowsingContext(bc), isSimple});
+      FULLSCREEN_LOG(
+          "BrowserChild::RecvCollectFullscreenDocsToUnfullscreen - "
+          "FullscreenDocStatus bc={}, simple={}",
+          bc->Id(), isSimple);
+    }
+  }
+
+  aResolve(entries);
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult BrowserChild::RecvExitFullscreenInRemote(
+    MaybeDiscardedBrowsingContext aContext) {
+  BrowsingContext* bc = aContext.IsNullOrDiscarded()
+                            ? GetBrowsingContext()
+                            : aContext.get();
+  Document* doc = bc ? bc->GetDocument() : nullptr;
+
+  if (NS_WARN_IF(!doc)) {
+    return IPC_OK();
+  }
+  doc->RestorePreviousFullscreenState();
+  return IPC_OK();
+}
+
 MOZ_CAN_RUN_SCRIPT_BOUNDARY
 mozilla::ipc::IPCResult BrowserChild::RecvRequestRemoteFrameApplyFullscreen(
     MaybeDiscardedBrowsingContext aSourceBrowsingContext,

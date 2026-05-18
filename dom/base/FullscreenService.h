@@ -8,6 +8,7 @@
 #define mozilla_dom_FullscreenService_h
 
 #include "mozilla/Logging.h"
+#include "mozilla/Maybe.h"
 #include "nsIFullscreenService.h"
 #include "nsIObserver.h"
 
@@ -33,9 +34,17 @@ class FullscreenService final : public nsIFullscreenService,
 
  private:
   FullscreenService();
-  // A private destructor must be declared.
-  ~FullscreenService() = default;
+  // A private destructor must be declared. Defined out-of-line so that
+  // UniquePtr<FullscreenManager> is only destroyed in a TU where
+  // FullscreenManager is a complete type.
+  ~FullscreenService();
 };
+
+// Tri-state for a document and whether or not it is
+// Simple fullscreen doc - Some(true)
+// Non-simple fullscreen doc - Some(false)
+// Not a fullscreen doc - Nothing()
+using FullscreenSimpleDoc = Maybe<bool>;
 
 }  // namespace mozilla::dom
 

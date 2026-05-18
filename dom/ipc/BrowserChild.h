@@ -739,6 +739,14 @@ class BrowserChild final : public nsMessageManagerScriptExecutor,
       MaybeDiscardedBrowsingContext aSourceBrowsingContext,
       RequestRemoteFrameApplyFullscreenResolver&& aResolve);
 
+  mozilla::ipc::IPCResult RecvExitFullscreenFullyForRemoteFrame();
+
+  mozilla::ipc::IPCResult RecvCollectFullscreenDocsToUnfullscreen(
+      CollectFullscreenDocsToUnfullscreenResolver&& aResolve);
+
+  mozilla::ipc::IPCResult RecvExitFullscreenInRemote(
+      MaybeDiscardedBrowsingContext aContext);
+
   void OnPointerRawUpdateEventListenerAdded(const nsPIDOMWindowInner* aWindow);
   void OnPointerRawUpdateEventListenerRemoved(
       const nsPIDOMWindowInner* aWindow);

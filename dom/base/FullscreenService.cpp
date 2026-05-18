@@ -14,6 +14,7 @@
 #include "mozilla/Services.h"
 #include "mozilla/StaticPrefs_full_screen_api.h"
 #include "mozilla/dom/BrowserChild.h"
+#include "mozilla/dom/BrowserParent.h"
 #include "mozilla/dom/CanonicalBrowsingContext.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/Element.h"
@@ -371,6 +372,37 @@ NS_IMETHODIMP
 FullscreenService::GetEnabled(bool* aIsEnabled) {
   *aIsEnabled = FullscreenService::Enabled();
   return NS_OK;
+}
+
+NS_IMETHODIMP
+FullscreenService::Cancel(mozilla::dom::BrowsingContext* aBrowsingContext) {
+  MOZ_ASSERT(XRE_IsParentProcess() && NS_IsMainThread());
+  if (NS_WARN_IF(aBrowsingContext == nullptr ||
+                 aBrowsingContext->IsDiscarded())) {
+    return NS_OK;
+  }
+  nsPIDOMWindowOuter* window =
+      aBrowsingContext->Canonical()->GetTopCrossChromeBoundaryDOMWindow();
+  FullscreenManager* manager = Manager(window->WindowID());
+  FULLSCREEN_LOG("FullscreenService::Cancel for bc={}", aBrowsingContext->Id());
+  manager->CancelFullscreen();
+  return NS_OK;
+}
+
+/* static */
+void FullscreenService::CancelFullscreen(
+    mozilla::dom::BrowsingContext* aContext) {
+  MOZ_DIAGNOSTIC_ASSERT(aContext);
+  if (XRE_IsContentProcess()) {
+    Document* doc = aContext->GetDocument();
+    WindowGlobalChild* wgc = doc ? doc->GetWindowGlobalChild() : nullptr;
+    if (wgc) {
+      (void)wgc->SendCancelFullscreen();
+    }
+  } else {
+    MOZ_ASSERT(XRE_IsParentProcess());
+    Get()->Cancel(aContext);
+  }
 }
 
 }  // namespace mozilla::dom

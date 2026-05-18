@@ -334,6 +334,8 @@ class WindowGlobalParent final : public WindowContext,
       const nsresult& aResult, const MaybeDiscardedBrowsingContext& aBC,
       const uint64_t& aRequestId);
 
+  mozilla::ipc::IPCResult RecvCancelFullscreen();
+
   mozilla::ipc::IPCResult RecvCheckPermitUnload(
       bool aHasInProcessBlocker, XPCOMPermitUnloadAction aAction,
       CheckPermitUnloadResolver&& aResolver);

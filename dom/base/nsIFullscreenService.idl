@@ -6,8 +6,13 @@
 // the QueryInterface method.
 #include "nsISupports.idl"
 
+webidl BrowsingContext;
 
 [scriptable, uuid(67fee6fe-2016-4409-9825-4d2ed9ca2bff)]
 interface nsIFullscreenService : nsISupports {
   readonly attribute boolean enabled;
+
+  // Exits fullscreen and cancels fullscreen requests made by any browsing context contained in the window
+  // where `aBrowsingContext` is a child.
+  void cancel(in BrowsingContext aBrowsingContext);
 };

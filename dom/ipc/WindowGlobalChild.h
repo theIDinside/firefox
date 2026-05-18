@@ -154,7 +154,9 @@ class WindowGlobalChild final : public WindowGlobalActor,
   // Document::ExitFullscreen to tag their requests so the parent-side
   // FullscreenServiceTransaction tick can be validated against the
   // currently-running EnterFullscreen / ExitFullscreen.
-  uint64_t NewFullscreenTransactionId() { return ++mNextFullscreenTransactionId; }
+  uint64_t NewFullscreenTransactionId() {
+    return ++mNextFullscreenTransactionId;
+  }
 
  protected:
   const nsACString& GetRemoteType() const override;

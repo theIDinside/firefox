@@ -823,6 +823,14 @@ WindowGlobalParent::RecvFullscreenServiceTransactionComplete(
   return IPC_OK();
 }
 
+mozilla::ipc::IPCResult WindowGlobalParent::RecvCancelFullscreen() {
+  auto bc = GetBrowsingContext();
+  if (bc) {
+    FullscreenService::Get()->Cancel(bc);
+  }
+  return IPC_OK();
+}
+
 namespace {
 
 class CheckPermitUnloadRequest final : public PromiseNativeHandler,

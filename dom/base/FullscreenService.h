@@ -93,6 +93,8 @@ class FullscreenService final : public nsIFullscreenService,
 
   // Called from ~nsGlobalWindowOuter to reap the per-window FullscreenManager.
   static void OnWindowOuterDestroyed(uint64_t aWindowId);
+  static void CancelFullscreen(BrowsingContext* aContext);
+
  private:
   nsTArray<UniquePtr<FullscreenManager>> mManagers;
 

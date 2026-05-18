@@ -15535,13 +15535,17 @@ already_AddRefed<Promise> Document::ExitFullscreen(ErrorResult& aRv) {
 }
 
 static void AskWindowToExitFullscreen(Document* aDoc) {
-  if (XRE_GetProcessType() == GeckoProcessType_Content) {
-    nsContentUtils::DispatchEventOnlyToChrome(
-        aDoc, aDoc, u"MozDOMFullscreen:Exit"_ns, CanBubble::eYes,
-        Cancelable::eNo, /* DefaultAction */ nullptr);
+  if (FullscreenService::Enabled()) {
+    FullscreenService::CancelFullscreen(aDoc->GetBrowsingContext());
   } else {
-    if (nsPIDOMWindowOuter* win = aDoc->GetWindow()) {
-      win->SetFullscreenInternal(FullscreenReason::ForFullscreenAPI, false);
+    if (XRE_GetProcessType() == GeckoProcessType_Content) {
+      nsContentUtils::DispatchEventOnlyToChrome(
+          aDoc, aDoc, u"MozDOMFullscreen:Exit"_ns, CanBubble::eYes,
+          Cancelable::eNo, /* DefaultAction */ nullptr);
+    } else {
+      if (nsPIDOMWindowOuter* win = aDoc->GetWindow()) {
+        win->SetFullscreenInternal(FullscreenReason::ForFullscreenAPI, false);
+      }
     }
   }
 }

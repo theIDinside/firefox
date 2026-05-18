@@ -197,6 +197,8 @@ parent:
                                      MaybeDiscardedBrowsingContext aBC,
                                      uint64_t aRequestId);
 
+  async CancelFullscreen();
+
   // Get content blocking events from the parent process.
   async GetContentBlockingEvents() returns (uint32_t events);
 

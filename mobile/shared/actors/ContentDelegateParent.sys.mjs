@@ -17,16 +17,20 @@ export class ContentDelegateParent extends GeckoViewActorParent {
 
     switch (aMsg.name) {
       case "GeckoView:DOMFullscreenExit": {
-        if (!this.#hasBeenDestroyed() && !this.#requestOrigin) {
-          this.#requestOrigin = this;
+        if (!Services.fullscreen.enabled) {
+          if (!this.#hasBeenDestroyed() && !this.#requestOrigin) {
+            this.#requestOrigin = this;
+          }
+          this.window.windowUtils.remoteFrameFullscreenReverted();
         }
-        this.window.windowUtils.remoteFrameFullscreenReverted();
         return null;
       }
 
       case "GeckoView:DOMFullscreenRequest": {
-        this.#requestOrigin = this;
-        this.window.windowUtils.remoteFrameFullscreenChanged(this.browser);
+        if (!Services.fullscreen.enabled) {
+          this.#requestOrigin = this;
+          this.window.windowUtils.remoteFrameFullscreenChanged(this.browser);
+        }
         return null;
       }
 

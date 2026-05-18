@@ -29,18 +29,21 @@ export class GeckoViewContent extends GeckoViewModule {
   }
 
   onEnable() {
-    this.window.addEventListener(
-      "MozDOMFullscreen:Entered",
-      this,
-      /* capture */ true,
-      /* untrusted */ false
-    );
-    this.window.addEventListener(
-      "MozDOMFullscreen:Exited",
-      this,
-      /* capture */ true,
-      /* untrusted */ false
-    );
+    // These events are only required if the Fullscreen API (https://fullscreen.spec.whatwg.org/) is not managed by Gecko
+    if (!Services.fullscreen.enabled) {
+      this.window.addEventListener(
+        "MozDOMFullscreen:Entered",
+        this,
+        /* capture */ true,
+        /* untrusted */ false
+      );
+      this.window.addEventListener(
+        "MozDOMFullscreen:Exited",
+        this,
+        /* capture */ true,
+        /* untrusted */ false
+      );
+    }
     this.window.addEventListener(
       "framefocusrequested",
       this,
@@ -60,16 +63,19 @@ export class GeckoViewContent extends GeckoViewModule {
   }
 
   onDisable() {
-    this.window.removeEventListener(
-      "MozDOMFullscreen:Entered",
-      this,
-      /* capture */ true
-    );
-    this.window.removeEventListener(
-      "MozDOMFullscreen:Exited",
-      this,
-      /* capture */ true
-    );
+    // These events are only required if the Fullscreen API (https://fullscreen.spec.whatwg.org/) is not managed by Gecko
+    if (!Services.fullscreen.enabled) {
+      this.window.removeEventListener(
+        "MozDOMFullscreen:Entered",
+        this,
+        /* capture */ true
+      );
+      this.window.removeEventListener(
+        "MozDOMFullscreen:Exited",
+        this,
+        /* capture */ true
+      );
+    }
     this.window.removeEventListener(
       "framefocusrequested",
       this,

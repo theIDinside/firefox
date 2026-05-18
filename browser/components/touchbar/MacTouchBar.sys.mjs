@@ -474,7 +474,11 @@ export class TouchBarHelper {
           gBuiltInInputs.OpenLocation.image =
             "chrome://browser/skin/fullscreen-exit.svg";
           gBuiltInInputs.OpenLocation.callback = () => {
-            TouchBarHelper.window.windowUtils.exitFullscreen();
+            if (!Services.fullscreen.enabled) {
+              TouchBarHelper.window.windowUtils.exitFullscreen();
+            } else {
+              Services.fullscreen.cancel(TouchBarHelper.window.browsingContext);
+            }
           };
         } else {
           gBuiltInInputs.OpenLocation.title = "open-location";

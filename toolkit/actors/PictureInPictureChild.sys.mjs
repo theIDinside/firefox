@@ -77,6 +77,7 @@ const TOGGLE_VISIBILITY_THRESHOLD_PREF =
   "media.videocontrols.picture-in-picture.video-toggle.visibility-threshold";
 const TEXT_TRACK_FONT_SIZE =
   "media.videocontrols.picture-in-picture.display-text-tracks.size";
+const FULLSCREEN_SERVICE_DISABLED = "full-screen-api.service-manager.disabled";
 
 const MOUSEMOVE_PROCESSING_DELAY_MS = 50;
 const TOGGLE_HIDING_TIMEOUT_MS = 3000;
@@ -1980,6 +1981,7 @@ export class PictureInPictureChild extends JSWindowActorChild {
         this.closePictureInPicture({ reason: "Pagehide" });
         break;
       }
+      case "MozDOMFullscreen:Entered":
       case "MozDOMFullscreen:Request": {
         this.closePictureInPicture({ reason: "Fullscreen" });
         break;
@@ -2360,11 +2362,22 @@ export class PictureInPictureChild extends JSWindowActorChild {
       }
 
       let chromeEventHandler = originatingWindow.docShell.chromeEventHandler;
-      chromeEventHandler.addEventListener(
-        "MozDOMFullscreen:Request",
-        this,
-        true
-      );
+      if (Services.prefs.getBoolPref(FULLSCREEN_SERVICE_DISABLED)) {
+        chromeEventHandler.addEventListener(
+          "MozDOMFullscreen:Request",
+          this,
+          true
+        );
+      } else {
+        // Fullscreen Service implementation sends no :Request message
+        // so PictureInPicture has to listen for a message that actually
+        // is sent by that implementation
+        chromeEventHandler.addEventListener(
+          "MozDOMFullscreen:Entered",
+          this,
+          true
+        );
+      }
       chromeEventHandler.addEventListener(
         "MozStopPictureInPicture",
         this,
@@ -2413,18 +2426,21 @@ export class PictureInPictureChild extends JSWindowActorChild {
       }
 
       let chromeEventHandler = originatingWindow.docShell?.chromeEventHandler;
-      if (chromeEventHandler) {
-        chromeEventHandler.removeEventListener(
-          "MozDOMFullscreen:Request",
-          this,
-          true
-        );
-        chromeEventHandler.removeEventListener(
-          "MozStopPictureInPicture",
-          this,
-          true
-        );
-      }
+      chromeEventHandler?.removeEventListener(
+        "MozDOMFullscreen:Request",
+        this,
+        true
+      );
+      chromeEventHandler?.removeEventListener(
+        "MozDOMFullscreen:Entered",
+        this,
+        true
+      );
+      chromeEventHandler?.removeEventListener(
+        "MozStopPictureInPicture",
+        this,
+        true
+      );
     }
   }
 

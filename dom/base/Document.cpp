@@ -15516,8 +15516,21 @@ MOZ_CAN_RUN_SCRIPT void Document::ProcessCloseRequest() {
 
 already_AddRefed<Promise> Document::ExitFullscreen(ErrorResult& aRv) {
   RefPtr<Promise> promise = Promise::Create(GetRelevantGlobal(), aRv);
-  UniquePtr<FullscreenExit> exit = FullscreenExit::Create(this, promise);
-  RestorePreviousFullscreenState(std::move(exit));
+  if (!FullscreenService::Enabled()) {
+    UniquePtr<FullscreenExit> exit = FullscreenExit::Create(this, promise);
+    RestorePreviousFullscreenState(std::move(exit));
+  } else {
+    if (!GetWindow()) {
+      promise->MaybeRejectWithTypeError("No active window");
+      return promise.forget();
+    }
+    if (!Fullscreen() || FullscreenRoots::IsEmpty()) {
+      promise->MaybeRejectWithTypeError("Not in fullscreen mode");
+      return promise.forget();
+    }
+    FullscreenService::SendRequestExitFullscreen(this, promise);
+  }
+
   return promise.forget();
 }
 

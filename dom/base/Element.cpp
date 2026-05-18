@@ -73,6 +73,7 @@
 #include "mozilla/dom/Attr.h"
 #include "mozilla/dom/BindContext.h"
 #include "mozilla/dom/BindingDeclarations.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/CSPViolationData.h"
 #include "mozilla/dom/ChildIterator.h"
 #include "mozilla/dom/CloseWatcher.h"
@@ -123,6 +124,7 @@
 #include "mozilla/dom/UnbindContext.h"
 #include "mozilla/dom/ViewTransition.h"
 #include "mozilla/dom/WindowBinding.h"
+#include "mozilla/dom/WindowGlobalChild.h"
 #include "mozilla/dom/XULCommandEvent.h"
 #include "mozilla/dom/nsCSPContext.h"
 #include "mozilla/dom/nsCSPUtils.h"
@@ -4768,6 +4770,46 @@ void Element::ReleaseCapture() {
   }
 }
 
+static void RequestFullscreenFromService(RefPtr<Element> aElement,
+                                         RefPtr<Promise> aPromise,
+                                         const FullscreenOptions& aOptions,
+                                         CallerType aCallerType) {
+  FULLSCREEN_LOG("Element::RequestFullscreen");
+  const bool allowedElement = aElement->IsHTMLElement() ||
+                              aElement->IsXULElement() ||
+                              aElement->IsSVGElement(nsGkAtoms::svg) ||
+                              aElement->IsMathMLElement(nsGkAtoms::math);
+
+  Document* ownerDoc = aElement->OwnerDoc();
+
+  if (!allowedElement) {
+    FullscreenRequest::Reject(ownerDoc, aElement, aPromise,
+                              "FullscreenDeniedNotHTMLSVGOrMathML");
+    return;
+  }
+
+  const auto check = ownerDoc->FullscreenElementReadyCheck(
+      aElement, aPromise, Some(aOptions.mKeyboardLock), aCallerType);
+
+  switch (check) {
+    case Document::ElementReadyCheckResult::eSame:
+      aPromise->MaybeResolveWithUndefined();
+      [[fallthrough]];
+    case Document::ElementReadyCheckResult::eErrorPromiseRejected:
+      FULLSCREEN_LOG(
+          "Document::ElementReadyCheckResult::eErrorPromiseRejected for "
+          "element {}",
+          ToString(*aElement));
+      return;
+    case Document::ElementReadyCheckResult::eKeyboardLockOnly:
+    case Document::ElementReadyCheckResult::eOk:
+      break;
+  }
+
+  FullscreenService::SendRequestFullscreen(aElement, aPromise, aOptions,
+                                           aCallerType);
+}
+
 already_AddRefed<Promise> Element::RequestFullscreen(
     const FullscreenOptions& aOptions, CallerType aCallerType,
     ErrorResult& aRv) {
@@ -4778,15 +4820,20 @@ already_AddRefed<Promise> Element::RequestFullscreen(
   RefPtr<Promise> promise = Promise::Create(GetRelevantGlobal(), aRv);
   if (const char* error = GetFullscreenError(aCallerType, OwnerDoc())) {
     FullscreenRequest::Reject(OwnerDoc(), this, promise, error);
+    return promise.forget();
+  }
+
+  if (FullscreenService::Enabled()) {
+    RequestFullscreenFromService(this, promise, aOptions, aCallerType);
   } else {
     MOZ_ASSERT(!FullscreenService::Enabled());
     auto request = FullscreenRequest::Create(this, aOptions.mKeyboardLock,
                                              promise, aCallerType, aRv);
     // Only grant fullscreen requests if this is called from inside a trusted
-    // event handler (i.e. inside an event handler for a user initiated event).
-    // This stops the fullscreen from being abused similar to the popups of old,
-    // and it also makes it harder for bad guys' script to go fullscreen and
-    // spoof the browser chrome/window and phish logins etc.
+    // event handler (i.e. inside an event handler for a user initiated
+    // event). This stops the fullscreen from being abused similar to the
+    // popups of old, and it also makes it harder for bad guys' script to go
+    // fullscreen and spoof the browser chrome/window and phish logins etc.
     // Note that requests for fullscreen inside a web app's origin are exempt
     // from this restriction.
     OwnerDoc()->RequestFullscreen(std::move(request));

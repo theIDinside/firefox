@@ -9,6 +9,7 @@
 
 #include "mozilla/Logging.h"
 #include "mozilla/Maybe.h"
+#include "mozilla/dom/BrowsingContext.h"
 #include "nsGlobalWindowOuter.h"
 #include "nsIFullscreenService.h"
 #include "nsIObserver.h"
@@ -16,9 +17,14 @@
 #include "nsTArray.h"
 
 namespace mozilla::dom {
+
+struct FullscreenOptions;
+
 class CanonicalBrowsingContext;
 class Document;
+class Element;
 class FullscreenManager;
+class WindowGlobalParent;
 
 class FullscreenService final : public nsIFullscreenService,
                                 public nsIObserver {
@@ -41,6 +47,33 @@ class FullscreenService final : public nsIFullscreenService,
 
   // called during XPCOM will shut down phase
   void Shutdown();
+
+  using EnterResolve = std::function<void(nsresult)>;
+  using ExitResolve = EnterResolve;
+
+  static void SendRequestFullscreen(RefPtr<Element> aElement,
+                                    RefPtr<Promise> aPromise,
+                                    const FullscreenOptions& aOptions,
+                                    CallerType aCallerType);
+  static void SendRequestExitFullscreen(Document* aDocument, Promise* aPromise);
+
+  static void RecvRequestFullscreen(CanonicalBrowsingContext* aContext,
+                                    uint64_t aChildRequestId,
+                                    bool aKeyboardLock,
+                                    EnterResolve&& aResolve);
+
+  static void RecvRequestExitFullscreen(CanonicalBrowsingContext* aContext,
+                                        uint64_t aChildRequestId,
+                                        ExitResolve&& aResolve);
+
+  // Called when the originating WindowGlobal sends FullscreenServiceTransaction
+  // to report success / failure of its post-resolver apply (or restore)
+  // step. Routes to the currently running EnterFullscreen / ExitFullscreen
+  // after validating aChildRequestId. Works like a "tick" on the Fullscreen
+  // Service queue.
+  static void ReceivedFullscreenTransaction(
+      const MaybeDiscardedBrowsingContext& aContext, uint64_t aChildRequestId,
+      nsresult aResult);
 
   // Called by FinishDOMFullscreenChange and is our hook
   // into fullscreen transitions.

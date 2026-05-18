@@ -8,11 +8,16 @@
 
 #include "CustomEvent.h"
 #include "FullscreenManager.h"
+#include "FullscreenPaintBarrier.h"
 #include "mozilla/AsyncEventDispatcher.h"
+#include "mozilla/FullscreenChange.h"
 #include "mozilla/Services.h"
 #include "mozilla/StaticPrefs_full_screen_api.h"
+#include "mozilla/dom/BrowserChild.h"
 #include "mozilla/dom/CanonicalBrowsingContext.h"
 #include "mozilla/dom/Document.h"
+#include "mozilla/dom/Element.h"
+#include "mozilla/dom/WindowGlobalChild.h"
 #include "mozilla/dom/WindowGlobalParent.h"
 #include "nsIObserverService.h"
 
@@ -47,6 +52,148 @@ void FullscreenService::Shutdown() {
 
   gFullscreenService = nullptr;
   sIsXPCOMShutdown = true;
+}
+
+/* static */
+void FullscreenService::SendRequestFullscreen(RefPtr<Element> aElement,
+                                              RefPtr<Promise> aPromise,
+                                              const FullscreenOptions& aOptions,
+                                              CallerType aCallerType) {
+  RefPtr<Document> ownerDoc = aElement->OwnerDoc();
+  WindowGlobalChild* wgc = ownerDoc->GetWindowGlobalChild();
+  if (!wgc) {
+    FullscreenRequest::Reject(ownerDoc, aElement, aPromise);
+    return;
+  }
+
+  const uint64_t requestId = wgc->NewFullscreenTransactionId();
+  RefPtr<BrowsingContext> bc = ownerDoc->GetBrowsingContext();
+
+  auto onResolve = [aPromise, aOptions, aElement, originDoc = ownerDoc,
+                    aCallerType, requestId, bc = RefPtr{bc},
+                    wgc = RefPtr{wgc}](nsresult aResult) {
+    if (NS_FAILED(aResult)) {
+      // Service-initiated abort, no need to send transaction update
+      FullscreenRequest::Reject(originDoc, aElement, aPromise);
+      return;
+    }
+
+    using Result = Document::ElementReadyCheckResult;
+    nsresult tickResult = NS_OK;
+    const auto check = originDoc->FullscreenElementReadyCheck(
+        aElement, aPromise, Some(aOptions.mKeyboardLock), aCallerType);
+    if (check == Result::eOk) {
+      FullscreenPaintBarrier::ArmForDocument(originDoc, true);
+      originDoc->ApplyFullscreen(aElement);
+    } else if (check == Result::eErrorPromiseRejected) {
+      // FullscreenElementReadyCheck has already rejected aPromise.
+      tickResult = NS_ERROR_ABORT;
+    }
+    if (NS_SUCCEEDED(tickResult)) {
+      originDoc->SetFullscreenKeyboardLockStatus(aOptions.mKeyboardLock);
+      aPromise->MaybeResolveWithUndefined();
+    }
+    (void)wgc->SendFullscreenServiceTransactionComplete(
+        tickResult, MaybeDiscardedBrowsingContext{bc}, requestId);
+  };
+
+  (void)wgc->SendRequestFullscreen(
+      requestId, aOptions.mKeyboardLock == FullscreenKeyboardLock::Browser,
+      std::move(onResolve),
+      [](auto&&) { /* actor torn down; service timer will catch */ });
+}
+
+/* static */
+void FullscreenService::SendRequestExitFullscreen(Document* aDocument,
+                                                  Promise* aPromise) {
+  MOZ_ASSERT(aDocument);
+
+  WindowGlobalChild* wgc = aDocument->GetWindowGlobalChild();
+  if (!wgc) {
+    aPromise->MaybeRejectWithTypeError("No WindowGlobalChild");
+    return;
+  }
+
+  uint64_t requestId = wgc->NewFullscreenTransactionId();
+  RefPtr<BrowsingContext> bc = aDocument->GetBrowsingContext();
+
+  auto onResolve = [promise = RefPtr{aPromise}, bc = RefPtr{bc},
+                    wgc = RefPtr{wgc}, doc = RefPtr{aDocument},
+                    requestId](nsresult aResult) {
+    FULLSCREEN_LOG("Document::ExitFullscreen: Resolve, status={}", aResult);
+    if (aResult == NS_ERROR_ABORT) {
+      promise->MaybeRejectWithTypeError("AbortError");
+      return;
+    } else if (NS_SUCCEEDED(aResult)) {
+      doc->RestorePreviousFullscreenState();
+    }
+    promise->MaybeResolveWithUndefined();
+    (void)wgc->SendFullscreenServiceTransactionComplete(
+        NS_OK, MaybeDiscardedBrowsingContext{bc}, requestId);
+  };
+
+  auto onReject = [promise = RefPtr{aPromise}](auto&& err) {
+    promise->MaybeRejectWithUndefined();
+  };
+
+  wgc->SendRequestExitFullscreen(requestId, std::move(onResolve),
+                                 std::move(onReject));
+}
+
+/* static */
+void FullscreenService::RecvRequestFullscreen(
+    CanonicalBrowsingContext* aContext, uint64_t aChildRequestId,
+    bool aKeyboardLock, EnterResolve&& aResolve) {
+  auto* topWindow = aContext->GetTopCrossChromeBoundaryDOMWindow();
+  if (!topWindow || !aContext->GetCurrentWindowGlobal()) {
+    MOZ_LOG(GetLogModule(), LogLevel::Warning,
+            ("Could not determine window, or window global for canonical "
+             "browsing context %" PRIu64,
+             aContext->Id()));
+    aResolve(NS_ERROR_ABORT);
+    return;
+  }
+
+  Get()
+      ->Manager(topWindow->WindowID())
+      ->QueueEnterRequest(aContext, aKeyboardLock, aChildRequestId,
+                          std::move(aResolve));
+}
+
+/* static */
+void FullscreenService::RecvRequestExitFullscreen(
+    CanonicalBrowsingContext* aContext, uint64_t aChildRequestId,
+    ExitResolve&& aResolve) {
+  auto* topWindow = aContext->GetTopCrossChromeBoundaryDOMWindow();
+  if (!topWindow) {
+    aResolve(NS_ERROR_ABORT);
+    return;
+  }
+
+  Get()
+      ->Manager(topWindow->WindowID())
+      ->QueueExitRequest(aContext, aChildRequestId, std::move(aResolve));
+}
+
+/* static */
+void FullscreenService::ReceivedFullscreenTransaction(
+    const MaybeDiscardedBrowsingContext& aContext, uint64_t aChildRequestId,
+    nsresult aResult) {
+  if (aContext.IsNullOrDiscarded()) {
+    return;
+  }
+
+  CanonicalBrowsingContext* bc = aContext->Canonical();
+  auto* topWindow = bc ? bc->GetTopCrossChromeBoundaryDOMWindow() : nullptr;
+  if (!topWindow) {
+    return;
+  }
+
+  FullscreenManager* manager = Get()->GetManager(topWindow->WindowID());
+  if (!manager) {
+    return;
+  }
+  manager->OnTransactionResponse(bc, aChildRequestId, aResult);
 }
 
 /* static */

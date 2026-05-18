@@ -323,6 +323,17 @@ class WindowGlobalParent final : public WindowContext,
   mozilla::ipc::IPCResult RecvShare(IPCWebShareData&& aData,
                                     ShareResolver&& aResolver);
 
+  mozilla::ipc::IPCResult RecvRequestFullscreen(
+      uint64_t aRequestId, bool aKeyboardLock,
+      RequestFullscreenResolver&& aResolve);
+
+  mozilla::ipc::IPCResult RecvRequestExitFullscreen(
+      uint64_t aRequestId, RequestExitFullscreenResolver&& aResolve);
+
+  mozilla::ipc::IPCResult RecvFullscreenServiceTransactionComplete(
+      const nsresult& aResult, const MaybeDiscardedBrowsingContext& aBC,
+      const uint64_t& aRequestId);
+
   mozilla::ipc::IPCResult RecvCheckPermitUnload(
       bool aHasInProcessBlocker, XPCOMPermitUnloadAction aAction,
       CheckPermitUnloadResolver&& aResolver);

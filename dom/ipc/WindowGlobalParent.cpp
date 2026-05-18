@@ -35,6 +35,7 @@
 #include "mozilla/dom/DigitalCredential.h"
 #include "mozilla/dom/DigitalCredentialParent.h"
 #include "mozilla/dom/ElementBinding.h"
+#include "mozilla/dom/FullscreenService.h"
 #include "mozilla/dom/IdentityCredential.h"
 #include "mozilla/dom/InProcessParent.h"
 #include "mozilla/dom/JSActorService.h"
@@ -787,6 +788,38 @@ mozilla::ipc::IPCResult WindowGlobalParent::RecvShare(
   RefPtr<ShareHandler> handler = new ShareHandler(std::move(aResolver));
   promise->AppendNativeHandler(handler);
 
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult WindowGlobalParent::RecvRequestFullscreen(
+    uint64_t aRequestId, bool aKeyboardLock,
+    RequestFullscreenResolver&& aResolve) {
+  CanonicalBrowsingContext* bc = GetBrowsingContext();
+  MOZ_DIAGNOSTIC_ASSERT(bc);
+  FullscreenService::RecvRequestFullscreen(bc, aRequestId, aKeyboardLock,
+                                           std::move(aResolve));
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult WindowGlobalParent::RecvRequestExitFullscreen(
+    uint64_t aRequestId, RequestExitFullscreenResolver&& aResolve) {
+  CanonicalBrowsingContext* bc = GetBrowsingContext();
+  MOZ_DIAGNOSTIC_ASSERT(bc);
+  FullscreenService::RecvRequestExitFullscreen(bc, aRequestId,
+                                               std::move(aResolve));
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult
+WindowGlobalParent::RecvFullscreenServiceTransactionComplete(
+    const nsresult& aResult, const MaybeDiscardedBrowsingContext& aBC,
+    const uint64_t& aTransactionId) {
+  FULLSCREEN_LOG(
+      "WindowGlobalParent::RecvFullscreenServiceTransaction bc={}, "
+      "transactionId={}, result={}",
+      aBC->Id(), aTransactionId, aResult);
+  FullscreenService::ReceivedFullscreenTransaction(aBC, aTransactionId,
+                                                   aResult);
   return IPC_OK();
 }
 

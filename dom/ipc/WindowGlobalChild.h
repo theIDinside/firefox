@@ -150,6 +150,12 @@ class WindowGlobalChild final : public WindowGlobalActor,
   void UnblockBFCacheFor(BFCacheStatus aStatus);
   void BlockBFCacheFor(BFCacheStatus aStatus);
 
+  // Monotonic id generator used by Element::RequestFullscreen and
+  // Document::ExitFullscreen to tag their requests so the parent-side
+  // FullscreenServiceTransaction tick can be validated against the
+  // currently-running EnterFullscreen / ExitFullscreen.
+  uint64_t NewFullscreenTransactionId() { return ++mNextFullscreenTransactionId; }
+
  protected:
   const nsACString& GetRemoteType() const override;
 
@@ -229,6 +235,11 @@ class WindowGlobalChild final : public WindowGlobalActor,
   RefPtr<dom::FeaturePolicy> mContainerFeaturePolicy;
   nsCOMPtr<nsIURI> mDocumentURI;
   int64_t mBeforeUnloadListeners = 0;
+
+  // Monotonic counter handed out by NewFullscreenRequestId(). Used to tag
+  // RequestFullscreen / RequestExitFullscreen so the parent-side service
+  // can validate the eventual FullscreenServiceTransaction tick.
+  uint64_t mNextFullscreenTransactionId = 0;
 };
 
 }  // namespace mozilla::dom

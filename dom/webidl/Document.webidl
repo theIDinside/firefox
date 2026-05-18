@@ -305,6 +305,9 @@ partial interface Document {
 
   [ChromeOnly, BinaryName="getFullscreenKeyboardLockStatus"]
   readonly attribute FullscreenKeyboardLock fullscreenKeyboardLock;
+
+  [ChromeOnly]
+  undefined setFullscreenKeyboardLockStatus(FullscreenKeyboardLock status);
 };
 
 // https://w3c.github.io/pointerlock/#extensions-to-the-document-interface

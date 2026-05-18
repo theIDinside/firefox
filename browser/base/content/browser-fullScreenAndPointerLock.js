@@ -866,6 +866,7 @@ if (Services.fullscreen.enabled) {
       super.init();
       addEventListener("MozDOMFullscreen:Entered", this, true);
       addEventListener("MozDOMFullscreen:Exited", this, true);
+      addEventListener("MozDOMFullscreen:UpdateKeyboardLock", this, true);
     }
 
     handleEvent(event) {
@@ -880,6 +881,26 @@ if (Services.fullscreen.enabled) {
         case "MozDOMFullscreen:Exited":
           window.FullScreen.cleanupDomFullscreen();
           break;
+        case "MozDOMFullscreen:UpdateKeyboardLock": {
+          const keyboardLockEnabled = Services.prefs.getBoolPref(
+            "dom.fullscreen.keyboard_lock.enabled",
+            false
+          );
+          const value = event.detail;
+          let newLock =
+            keyboardLockEnabled && (value == "none" || value == "browser")
+              ? value
+              : "none";
+          if (window.document.fullscreenKeyboardLock != newLock) {
+            window.document.setFullscreenKeyboardLockStatus(newLock);
+            window.PointerlockFsWarning.close("fullscreen-warning");
+            window.PointerlockFsWarning.showFullScreen(
+              gBrowser.selectedBrowser.browsingContext,
+              newLock == "browser"
+            );
+          }
+          break;
+        }
         default:
           super.handleEvent(event);
           break;

@@ -33,6 +33,20 @@ export class AndroidPictureInPictureParent extends GeckoViewActorParent {
       case "AndroidPiP:Close": {
         return lazy.AndroidPictureInPicture.close(bc.group.id);
       }
+      case "AndroidPiP:VideoActive": {
+        const { videoRef } = msg.data;
+        debug`VideoActive: bcId=${bc.id} bcgId=${bc.group.id} osPid=${this.manager.osPid} videoRef.browsingContextId=${videoRef.browsingContextId}`;
+        lazy.AndroidPictureInPicture.setActiveVideoRef(
+          bc.group.id,
+          this.manager,
+          videoRef
+        );
+        return null;
+      }
+      case "AndroidPiP:VideoInactive": {
+        lazy.AndroidPictureInPicture.clearActiveVideoRef(bc.group.id);
+        return null;
+      }
     }
     return null;
   }

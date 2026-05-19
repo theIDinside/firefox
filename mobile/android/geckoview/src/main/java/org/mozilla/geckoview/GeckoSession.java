@@ -3412,12 +3412,14 @@ public class GeckoSession {
    */
   @UiThread
   public void requestPictureInPicture() {
-    if (mContextMenuVideoRef == null) {
-      return;
+    if (mContextMenuVideoRef != null) {
+      final GeckoBundle bundle = new GeckoBundle();
+      bundle.putBundle("videoRef", mContextMenuVideoRef);
+      mEventDispatcher.dispatch("GeckoViewContent:RequestPictureInPicture", bundle);
+    } else {
+      mEventDispatcher.dispatch(
+          "GeckoViewContent:RequestPictureInPictureForCurrentMedia", null);
     }
-    final GeckoBundle bundle = new GeckoBundle();
-    bundle.putBundle("videoRef", mContextMenuVideoRef);
-    mEventDispatcher.dispatch("GeckoViewContent:RequestPictureInPicture", bundle);
   }
 
   /**

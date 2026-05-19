@@ -18,6 +18,22 @@ export class AndroidPictureInPictureChild extends GeckoViewActorChild {
   handleEvent(event) {
     if (event.type === "DOMContentLoaded" && event.target === this.document) {
       this.sendAsyncMessage("AndroidPiP:Ready");
+      return;
+    }
+
+    const video = event.target;
+    if (!HTMLVideoElement.isInstance(video)) {
+      return;
+    }
+
+    if (event.type === "playing") {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        this.sendAsyncMessage("AndroidPiP:VideoActive", {
+          videoRef: lazy.ContentDOMReference.get(video),
+        });
+      }
+    } else if (event.type === "pause" || event.type === "ended") {
+      this.sendAsyncMessage("AndroidPiP:VideoInactive");
     }
   }
 
@@ -26,9 +42,11 @@ export class AndroidPictureInPictureChild extends GeckoViewActorChild {
     switch (msg.name) {
       case "AndroidPiP:SetupPlayer": {
         const { videoRef } = msg.data;
+        const bc = this.manager.browsingContext;
+        debug`SetupPlayer: my bcId=${bc.id} bcgId=${bc.group.id} videoRef.browsingContextId=${videoRef.browsingContextId}`;
         const sourceVideo = await lazy.ContentDOMReference.resolve(videoRef);
         if (!sourceVideo) {
-          warn`SetupPlayer: could not resolve source video`;
+          warn`SetupPlayer: could not resolve source video ${videoRef}`;
           throw new Error("Could not resolve source video");
         }
 

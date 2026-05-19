@@ -56,7 +56,13 @@ internal class MediaNotification(
 
         if (data.action != null) {
             builder.addAction(data.action)
-            style.setShowActionsInCompactView(0)
+        }
+        if (data.pipAction != null) {
+            builder.addAction(data.pipAction)
+        }
+        when {
+            data.action != null && data.pipAction != null -> style.setShowActionsInCompactView(0, 1)
+            data.action != null -> style.setShowActionsInCompactView(0)
         }
         builder.setStyle(style)
         if (isCustomTab) {
@@ -91,6 +97,16 @@ private suspend fun SessionState.toNotificationData(
                     context,
                     0,
                     AbstractMediaSessionService.pauseIntent(context, cls),
+                    getNotificationFlag(),
+                ),
+            ).build(),
+            pipAction = NotificationCompat.Action.Builder(
+                R.drawable.mozac_feature_media_action_pip,
+                context.getString(R.string.mozac_feature_media_notification_action_pip),
+                PendingIntent.getService(
+                    context,
+                    0,
+                    AbstractMediaSessionService.pipIntent(context, cls, id),
                     getNotificationFlag(),
                 ),
             ).build(),
@@ -134,6 +150,7 @@ private data class NotificationData(
     @param:DrawableRes val icon: Int = R.drawable.mozac_feature_media_playing,
     val largeIcon: Bitmap? = null,
     val action: NotificationCompat.Action? = null,
+    val pipAction: NotificationCompat.Action? = null,
     val contentIntent: PendingIntent? = null,
 )
 

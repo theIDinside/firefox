@@ -638,6 +638,13 @@ class GeckoEngineSession(
     }
 
     /**
+     * See [EngineSession.requestPictureInPicture].
+     */
+    override fun requestPictureInPicture() {
+        geckoSession.requestPictureInPicture()
+    }
+
+    /**
      * See [EngineSession.checkForFormData].
      */
     override fun checkForFormData(adjustPriority: Boolean) {

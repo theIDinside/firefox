@@ -447,6 +447,32 @@ data class ContextMenuCandidate(
         )
 
         /**
+         * Context Menu item: "Picture-in-Picture".
+         *
+         * @param context [Context] used for various system interactions.
+         * @param onRequestPictureInPicture Callback invoked with the [SessionState] when the user
+         * selects this item. The caller is responsible for obtaining the engine session and calling
+         * [EngineSession.requestPictureInPicture] on it.
+         * @param additionalValidation Callback for the final validation in deciding whether this menu
+         * option will be shown. Will only be called if all the intrinsic validations passed.
+         */
+        fun createEnterPictureInPictureCandidate(
+            context: Context,
+            onRequestPictureInPicture: (SessionState) -> Unit,
+            additionalValidation: (SessionState, HitResult) -> Boolean = { _, _ -> true },
+        ) = ContextMenuCandidate(
+            id = "mozac.feature.contextmenu.enter_pip",
+            label = context.getString(R.string.mozac_feature_contextmenu_enter_picture_in_picture),
+            showFor = { tab, hitResult ->
+                hitResult is HitResult.VIDEO && hitResult.src.isNotEmpty() &&
+                    additionalValidation(tab, hitResult)
+            },
+            action = { tab, _ ->
+                onRequestPictureInPicture(tab)
+            },
+        )
+
+        /**
          * Context Menu item: "Save link".
          *
          * @param context [Context] used for various system interactions.

@@ -4,10 +4,17 @@
 
 import { GeckoViewModule } from "resource://gre/modules/GeckoViewModule.sys.mjs";
 
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  AndroidPictureInPicture:
+    "resource://gre/modules/AndroidPictureInPicture.sys.mjs",
+});
+
 export class GeckoViewContent extends GeckoViewModule {
   onInit() {
     this.registerListener([
       "GeckoViewContent:ExitFullScreen",
+      "GeckoViewContent:RequestPictureInPicture",
       "GeckoView:ClearMatches",
       "GeckoView:DisplayMatches",
       "GeckoView:FindInPage",
@@ -182,6 +189,19 @@ export class GeckoViewContent extends GeckoViewModule {
       case "GeckoViewContent:ExitFullScreen":
         this.browser.ownerDocument.exitFullscreen();
         break;
+      case "GeckoViewContent:RequestPictureInPicture": {
+        const { videoRef } = aData;
+        const bc = BrowsingContext.get(videoRef.browsingContextId);
+        if (!bc) {
+          break;
+        }
+        const wgp = bc.currentWindowGlobal;
+        if (!wgp) {
+          break;
+        }
+        lazy.AndroidPictureInPicture.request(wgp, videoRef);
+        break;
+      }
       case "GeckoView:ClearMatches": {
         if (!this.isPdfJs) {
           this._clearMatches();

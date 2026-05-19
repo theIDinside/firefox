@@ -545,6 +545,12 @@ class BrowserFragment : BaseBrowserFragment(), UserInteractionHandler, SystemIns
             requireContext(),
             contextMenuCandidateAppLinksUseCases,
         ) + createOpenWithGoogleLensCandidate(context)
+         + ContextMenuCandidate.createEnterPictureInPictureCandidate(
+            context = requireContext(),
+            onRequestPictureInPicture = { sessionState ->
+                sessionState.engineState.engineSession?.requestPictureInPicture()
+            },
+        )
     }
 
     private fun createOpenWithGoogleLensCandidate(context: Context) = ContextMenuCandidate(

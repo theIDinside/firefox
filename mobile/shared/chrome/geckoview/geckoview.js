@@ -435,12 +435,23 @@ function createBrowser(settings) {
   browser.setAttribute("flex", "1");
   browser.setAttribute("maychangeremoteness", "true");
   browser.setAttribute("remote", "true");
+  // Android PIP pins the new session to the source content's browsing context
+  // group and remote process so the cloned <video> stays alive in the PIP
+  // window. Honor those embedder-supplied values; otherwise fall back to
+  // ProcessIsolation's prediction.
+  if (settings.browsingContextGroupId > 0) {
+    browser.setAttribute(
+      "initialBrowsingContextGroupId",
+      settings.browsingContextGroupId
+    );
+  }
   browser.setAttribute(
     "remoteType",
-    ChromeUtils.predictRemoteTypeForURI(null, {
-      window,
-      geckoViewSessionContextId: settings.sessionContextId ?? undefined,
-    })
+    settings.remoteType ||
+      ChromeUtils.predictRemoteTypeForURI(null, {
+        window,
+        geckoViewSessionContextId: settings.sessionContextId ?? undefined,
+      })
   );
   browser.setAttribute("messagemanagergroup", "browsers");
   browser.setAttribute("manualactiveness", "true");
